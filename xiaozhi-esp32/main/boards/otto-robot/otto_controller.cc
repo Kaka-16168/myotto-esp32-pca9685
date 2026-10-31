@@ -1,10 +1,10 @@
 /*
-    Otto机器人控制器 - MCP协议版本 (PCA9685 驱动版 + 优雅关机 + 闹钟)
+    Otto机器人控制器 - MCP协议版本 (PCA9685 新版 I2C 驱动版 + 优雅关机 + 闹钟)
 */
 
 #include <cJSON.h>
 #include <esp_log.h>
-#include <driver/i2c.h>
+#include <driver/i2c_master.h> // 🚨 改为新版 I2C 驱动头文件
 #include <driver/gpio.h>
 #include <esp_sleep.h>
 #include <freertos/timers.h>
@@ -15,7 +15,7 @@
 #include "application.h"
 #include "board.h"
 #include "config.h"
-#include "display/display.h"  // 🌟 新增：引入 Display 类的完整定义，解决闹钟显示报错
+#include "display/display.h"  // 🌟 引入 Display 类定义，解决闹钟显示报错
 #include "mcp_server.h"
 #include "otto_movements.h"
 #include "power_manager.h"
@@ -30,6 +30,10 @@
 #define PCA9685_I2C_FREQ    100000
 #define PCA9685_ADDR        0x40
 // ----------------------
+
+// 🚨 声明全局 I2C 设备句柄，供 otto_movements.cc 使用
+i2c_master_dev_handle_t pca9685_dev_handle = nullptr; 
+i2c_master_bus_handle_t i2c_bus_handle = nullptr;
 
 class OttoController {
 private:
@@ -61,63 +65,59 @@ private:
         ACTION_SERVO_SEQUENCE = 18, ACTION_WHIRLWIND_LEG = 19
     };
 
-    // PCA9685 初始化 (使用配置中的动态引脚)
+    // 新版 I2C 初始化
     void InitPca9685() {
         if (hw_config_.i2c_sda_pin == GPIO_NUM_NC || hw_config_.i2c_scl_pin == GPIO_NUM_NC) {
             ESP_LOGE(TAG, "I2C 引脚未配置，PCA9685 初始化失败！");
             return;
         }
 
-        i2c_config_t conf = {};
-        conf.mode = I2C_MODE_MASTER;
-        conf.sda_io_num = hw_config_.i2c_sda_pin;
-        conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
-        conf.scl_io_num = hw_config_.i2c_scl_pin;
-        conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
-        conf.master.clk_speed = PCA9685_I2C_FREQ;
+        i2c_master_bus_config_t i2c_bus_cfg = {
+            .i2c_port = PCA9685_I2C_PORT,
+            .sda_io_num = hw_config_.i2c_sda_pin,
+            .scl_io_num = hw_config_.i2c_scl_pin,
+            .clk_source = I2C_CLK_SRC_DEFAULT,
+            .glitch_ignore_cnt = 7,
+            .intr_priority = 0,
+            .trans_queue_depth = 0,
+            .flags = { .enable_internal_pullup = 1 },
+        };
         
-        i2c_param_config(PCA9685_I2C_PORT, &conf);
-        esp_err_t ret = i2c_driver_install(PCA9685_I2C_PORT, conf.mode, 0, 0, 0);
-        if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-            ESP_LOGE(TAG, "I2C 驱动安装失败: %s", esp_err_to_name(ret));
+        esp_err_t ret = i2c_new_master_bus(&i2c_bus_cfg, &i2c_bus_handle);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "I2C 总线初始化失败: %s", esp_err_to_name(ret));
             return;
         }
 
-        // 1. 设置 MODE1 寄存器进入休眠
-        uint8_t mode1 = 0x10; 
-        i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-        i2c_master_start(cmd);
-        i2c_master_write_byte(cmd, (PCA9685_ADDR << 1) | I2C_MASTER_WRITE, true);
-        i2c_master_write_byte(cmd, 0x00, true); 
-        i2c_master_write_byte(cmd, mode1, true); 
-        i2c_master_stop(cmd);
-        i2c_master_cmd_begin(PCA9685_I2C_PORT, cmd, pdMS_TO_TICKS(1000));
-        i2c_cmd_link_delete(cmd);
-
-        // 2. 设置 PRE_SCALE 为 121 (50Hz)
-        uint8_t prescale = 121;
-        cmd = i2c_cmd_link_create();
-        i2c_master_start(cmd);
-        i2c_master_write_byte(cmd, (PCA9685_ADDR << 1) | I2C_MASTER_WRITE, true);
-        i2c_master_write_byte(cmd, 0xFE, true); 
-        i2c_master_write_byte(cmd, prescale, true); 
-        i2c_master_stop(cmd);
-        i2c_master_cmd_begin(PCA9685_I2C_PORT, cmd, pdMS_TO_TICKS(1000));
-        i2c_cmd_link_delete(cmd);
-
-        // 3. 唤醒并开启自动递增
-        mode1 = 0x20; 
-        cmd = i2c_cmd_link_create();
-        i2c_master_start(cmd);
-        i2c_master_write_byte(cmd, (PCA9685_ADDR << 1) | I2C_MASTER_WRITE, true);
-        i2c_master_write_byte(cmd, 0x00, true);
-        i2c_master_write_byte(cmd, mode1, true);
-        i2c_master_stop(cmd);
-        i2c_master_cmd_begin(PCA9685_I2C_PORT, cmd, pdMS_TO_TICKS(1000));
-        i2c_cmd_link_delete(cmd);
+        i2c_device_config_t dev_cfg = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address = PCA9685_ADDR,
+            .scl_speed_hz = PCA9685_I2C_FREQ,
+        };
         
-        vTaskDelay(pdMS_TO_TICKS(10)); // 等待晶振稳定
-        ESP_LOGI(TAG, "PCA9685 初始化成功 (SDA=%d, SCL=%d)", hw_config_.i2c_sda_pin, hw_config_.i2c_scl_pin);
+        ret = i2c_master_bus_add_device(i2c_bus_handle, &dev_cfg, &pca9685_dev_handle);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "PCA9685 设备添加失败: %s", esp_err_to_name(ret));
+            return;
+        }
+
+        // 使用新版 API 写入 PCA9685 初始化寄存器
+        uint8_t data[2];
+        
+        // 1. 进入休眠模式 (MODE1 = 0x10)
+        data[0] = 0x00; data[1] = 0x10; 
+        i2c_master_transmit(pca9685_dev_handle, data, 2, 100);
+        
+        // 2. 设置 PRE_SCALE 为 121 (50Hz)
+        data[0] = 0xFE; data[1] = 121;  
+        i2c_master_transmit(pca9685_dev_handle, data, 2, 100);
+        
+        // 3. 唤醒并开启自动递增 (MODE1 = 0x20)
+        data[0] = 0x00; data[1] = 0x20; 
+        i2c_master_transmit(pca9685_dev_handle, data, 2, 100);
+        
+        vTaskDelay(pdMS_TO_TICKS(10));
+        ESP_LOGI(TAG, "PCA9685 初始化成功 (新版 I2C API)");
     }
 
     static void ActionTask(void* arg) {
@@ -413,14 +413,12 @@ public:
                                QueueAction(ACTION_HOME, 1, 1000, 1, 0); return true;
                            });
 
-        // 优雅关机
         mcp_server.AddTool("self.system.shutdown", "关闭机器人电源并进入深度睡眠", PropertyList(),
                            [this](const PropertyList& properties) -> ReturnValue {
                                ESP_LOGI(TAG, "收到关机指令，准备进入深度睡眠...");
                                if (action_task_handle_ != nullptr) { vTaskDelete(action_task_handle_); action_task_handle_ = nullptr; }
                                xQueueReset(action_queue_);
                                
-                               // 机器人回正，熄灭屏幕，防止强行断电卡死
                                otto_.Home(true); 
                                auto backlight = Board::GetInstance().GetBacklight();
                                if (backlight) backlight->SetBrightness(0);
@@ -430,7 +428,6 @@ public:
                                return true;
                            });
 
-        // 闹钟工具
         mcp_server.AddTool("self.alarm.set", "设置一个倒计时闹钟或提醒",
             PropertyList({ Property("seconds", kPropertyTypeInteger, 10, 1, 86400) }),
             [this](const PropertyList& properties) -> ReturnValue {

@@ -15,6 +15,7 @@
 #include "application.h"
 #include "board.h"
 #include "config.h"
+#include "display/display.h"  // 🌟 新增：引入 Display 类的完整定义，解决闹钟显示报错
 #include "mcp_server.h"
 #include "otto_movements.h"
 #include "power_manager.h"

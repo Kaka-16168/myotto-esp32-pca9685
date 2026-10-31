@@ -5,7 +5,7 @@
 #include <math.h>
 
 #include "freertos/idf_additions.h"
-#include <driver/i2c.h>
+#include <driver/i2c_master.h>
 #include <esp_log.h>
 
 static const char* TAG = "OttoMovements";
@@ -15,10 +15,10 @@ static const char* TAG = "OttoMovements";
 // ==========================================
 // PCA9685 底层 I2C 驱动配置
 // ==========================================
-#define PCA9685_I2C_ADDR    0x40
-#define PCA9685_MODE1       0x00
-#define PCA9685_PRESCALE    0xFE
 #define PCA9685_LED0_ON_L   0x06
+
+// 从 otto_controller.cc 导出的 I2C 设备句柄
+extern i2c_master_dev_handle_t pca9685_dev_handle;
 
 namespace {
 float EaseOutCubic(float t) {
@@ -26,8 +26,10 @@ float EaseOutCubic(float t) {
     return 1.0f - inv * inv * inv;
 }
 
-// 向 PCA9685 写入单个舵机的 PWM 值
+// 向 PCA9685 写入单个舵机的 PWM 值 (使用新版 I2C 驱动)
 void SetPcaPwm(uint8_t channel, int angle, int trim) {
+    if (pca9685_dev_handle == nullptr) return;
+
     // 加上微调值并限制在 0-180 度
     int target_angle = angle + trim;
     if (target_angle < 0) target_angle = 0;
@@ -38,18 +40,12 @@ void SetPcaPwm(uint8_t channel, int angle, int trim) {
     float pulse_us = 500.0f + (target_angle / 180.0f) * 2000.0f;
     uint16_t off_count = (uint16_t)((pulse_us / 20000.0f) * 4096.0f);
 
+    // 构造 I2C 数据包：寄存器地址 + ON_L + ON_H + OFF_L + OFF_H
     uint8_t reg = PCA9685_LED0_ON_L + 4 * channel;
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (PCA9685_I2C_ADDR << 1) | I2C_MASTER_WRITE, true);
-    i2c_master_write_byte(cmd, reg, true);
-    i2c_master_write_byte(cmd, 0, true); // ON_L
-    i2c_master_write_byte(cmd, 0, true); // ON_H
-    i2c_master_write_byte(cmd, off_count & 0xFF, true); // OFF_L
-    i2c_master_write_byte(cmd, off_count >> 8, true);   // OFF_H
-    i2c_master_stop(cmd);
-    i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_PERIOD_MS);
-    i2c_cmd_link_delete(cmd);
+    uint8_t data[5] = {reg, 0, 0, (uint8_t)(off_count & 0xFF), (uint8_t)(off_count >> 8)};
+    
+    // 直接发送数据
+    i2c_master_transmit(pca9685_dev_handle, data, 5, 100);
 }
 }  // namespace
 
@@ -89,7 +85,6 @@ void Otto::Init(int left_leg, int right_leg, int left_foot, int right_foot, int 
 }
 
 void Otto::AttachServos() {
-    // I2C 已经在 OttoController 中初始化过了
     ESP_LOGI(TAG, "PCA9685 Servos Attached (Using Channels)");
     
     // 初始化为 90 度
@@ -280,7 +275,6 @@ void Otto::SetRestState(bool state) {
 
 // ==========================================
 // 以下所有动作函数代码保持原样不变！
-// （因为底层驱动已被替换为 I2C，这里直接复用）
 // ==========================================
 void Otto::Jump(float steps, int period) {
     int up[SERVO_COUNT] = {90, 90, 150, 30, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};

@@ -113,12 +113,11 @@ constexpr HardwareConfig NON_CAMERA_VERSION_CONFIG = {
 
     // ==========================================
     // 🚨 注意：这里填的是 PCA9685 的通道号 (0-15)
-    // 已为你将左右腿、左右脚的通道互换
     // ==========================================
-    .right_leg_pin = (gpio_num_t)2,   // 右腿 -> 原本左腿的通道 2
-    .right_foot_pin = (gpio_num_t)3,  // 右脚 -> 原本左脚的通道 3
-    .left_leg_pin = (gpio_num_t)0,    // 左腿 -> 原本右腿的通道 0
-    .left_foot_pin = (gpio_num_t)1,   // 左脚 -> 原本右脚的通道 1
+    .right_leg_pin = (gpio_num_t)1,   // 右腿 
+    .right_foot_pin = (gpio_num_t)3,  // 右脚 
+    .left_leg_pin = (gpio_num_t)0,    // 左腿
+    .left_foot_pin = (gpio_num_t)2,   // 左脚
     
     .left_hand_pin = (gpio_num_t)4,   // 左手 -> 通道 4 (如果没手部舵机填 -1)
     .right_hand_pin = (gpio_num_t)5,  // 右手 -> 通道 5 (如果没手部舵机填 -1)

@@ -114,6 +114,20 @@ public:
         InitializeWebSocketControlServer();
     }
 
+    // ========================================================
+    // 🌟 新增：重写配网模式，解决配网不跳转/屏幕无提示的问题
+    // ========================================================
+    void EnterWifiConfigMode() override {
+        auto display = GetDisplay();
+        if (display) {
+            // 强制在屏幕上显示配网提示
+            display->SetChatMessage("system", "等待配网中，请连接WiFi...");
+        }
+        // 调用底层原生逻辑（开启 AP 热点等）
+        WifiBoard::EnterWifiConfigMode();
+    }
+    // ========================================================
+
     void InitializeAudioCodec() {
         // 根据 config.h 中的 audio_use_simplex 配置，走 Simplex 模式
         if (hw_config_.audio_use_simplex) {

@@ -31,6 +31,9 @@
 #define PCA9685_I2C_FREQ    100000
 #define PCA9685_ADDR        0x40
 
+// 🌟 全局定义 I2C 设备句柄，供 otto_movements.cc 调用
+i2c_master_dev_handle_t pca9685_dev_handle = nullptr;
+
 class OttoController {
 private:
     Otto otto_;
@@ -80,23 +83,24 @@ private:
             .device_address = PCA9685_ADDR,
             .scl_speed_hz = PCA9685_I2C_FREQ,
         };
-        ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus_handle_, &dev_cfg, &pca9685_dev_handle_));
+        // 🌟 这里改为使用全局变量 pca9685_dev_handle
+        ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus_handle_, &dev_cfg, &pca9685_dev_handle));
 
         uint8_t data[2];
         data[0] = 0x00; data[1] = 0x10; // 睡眠模式
-        i2c_master_transmit(pca9685_dev_handle_, data, 2, -1);
+        i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         
         data[0] = 0xFE; data[1] = 121;  // 50Hz
-        i2c_master_transmit(pca9685_dev_handle_, data, 2, -1);
+        i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         
         data[0] = 0x00; data[1] = 0x20; // 唤醒
-        i2c_master_transmit(pca9685_dev_handle_, data, 2, -1);
+        i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         
         // 🌟 重要：开机时将所有 16 个通道的输出设为 0，防止上电舵机乱转拉低电压导致重启
         for (int i = 0; i < 16; i++) {
             uint8_t reg = 0x06 + 4 * i;
             uint8_t off_data[5] = {reg, 0, 0, 0, 0};
-            i2c_master_transmit(pca9685_dev_handle_, off_data, 5, 100);
+            i2c_master_transmit(pca9685_dev_handle, off_data, 5, 100);
         }
         
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -279,7 +283,6 @@ private:
 
     void StartActionTaskIfNeeded() {
         if (action_task_handle_ == nullptr) {
-            // 🌟 重要：将堆栈从 3KB 放大到 6KB，防止栈溢出导致系统崩溃重启
             xTaskCreate(ActionTask, "otto_action", 1024 * 6, this, configMAX_PRIORITIES - 1, &action_task_handle_);
         }
     }

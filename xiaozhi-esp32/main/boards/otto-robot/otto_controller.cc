@@ -1,15 +1,15 @@
 /*
-    Otto机器人控制器 - MCP协议版本 (PCA9685 新版 I2C 驱动版 + 优雅关机 + 闹钟)
+    Otto机器人控制器 - MCP协议版本 (PCA9685 新版 I2C 驱动版 + 优雅关机 + 独立任务闹钟)
 */
 
 #include <cJSON.h>
 #include <esp_log.h>
-#include <driver/i2c_master.h> // 🚨 改为新版 I2C 驱动头文件
+#include <driver/i2c_master.h>
 #include <driver/gpio.h>
 #include <esp_sleep.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/timers.h>
+#include <freertos/timers.h> // 可以保留，不影响
 
 #include <cstdlib> 
 #include <cstring>
@@ -17,7 +17,7 @@
 #include "application.h"
 #include "board.h"
 #include "config.h"
-#include "display/display.h"  // 🌟 引入 Display 类定义，解决闹钟显示报错
+#include "display/display.h"
 #include "mcp_server.h"
 #include "otto_movements.h"
 #include "power_manager.h"
@@ -33,7 +33,6 @@
 #define PCA9685_ADDR        0x40
 // ----------------------
 
-// 🚨 声明全局 I2C 设备句柄，供 otto_movements.cc 使用
 i2c_master_dev_handle_t pca9685_dev_handle = nullptr; 
 i2c_master_bus_handle_t i2c_bus_handle = nullptr;
 
@@ -55,6 +54,12 @@ private:
         char servo_sequence_json[512];
     };
 
+    // 闹钟任务参数
+    struct AlarmParams {
+        OttoController* controller;
+        int seconds;
+    };
+
     enum ActionType {
         ACTION_WALK = 1, ACTION_TURN = 2, ACTION_JUMP = 3, ACTION_SWING = 4,
         ACTION_MOONWALK = 5, ACTION_BEND = 6, ACTION_SHAKE_LEG = 7, ACTION_SIT = 25,
@@ -67,12 +72,8 @@ private:
         ACTION_SERVO_SEQUENCE = 18, ACTION_WHIRLWIND_LEG = 19
     };
 
-    // 新版 I2C 初始化
     void InitPca9685() {
-        if (hw_config_.i2c_sda_pin == GPIO_NUM_NC || hw_config_.i2c_scl_pin == GPIO_NUM_NC) {
-            ESP_LOGE(TAG, "I2C 引脚未配置，PCA9685 初始化失败！");
-            return;
-        }
+        if (hw_config_.i2c_sda_pin == GPIO_NUM_NC || hw_config_.i2c_scl_pin == GPIO_NUM_NC) return;
 
         i2c_master_bus_config_t i2c_bus_cfg = {
             .i2c_port = PCA9685_I2C_PORT,
@@ -86,10 +87,7 @@ private:
         };
         
         esp_err_t ret = i2c_new_master_bus(&i2c_bus_cfg, &i2c_bus_handle);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "I2C 总线初始化失败: %s", esp_err_to_name(ret));
-            return;
-        }
+        if (ret != ESP_OK) return;
 
         i2c_device_config_t dev_cfg = {
             .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -98,28 +96,17 @@ private:
         };
         
         ret = i2c_master_bus_add_device(i2c_bus_handle, &dev_cfg, &pca9685_dev_handle);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "PCA9685 设备添加失败: %s", esp_err_to_name(ret));
-            return;
-        }
+        if (ret != ESP_OK) return;
 
-        // 使用新版 API 写入 PCA9685 初始化寄存器
         uint8_t data[2];
-        
-        // 1. 进入休眠模式 (MODE1 = 0x10)
         data[0] = 0x00; data[1] = 0x10; 
         i2c_master_transmit(pca9685_dev_handle, data, 2, 100);
-        
-        // 2. 设置 PRE_SCALE 为 121 (50Hz)
         data[0] = 0xFE; data[1] = 121;  
         i2c_master_transmit(pca9685_dev_handle, data, 2, 100);
-        
-        // 3. 唤醒并开启自动递增 (MODE1 = 0x20)
         data[0] = 0x00; data[1] = 0x20; 
         i2c_master_transmit(pca9685_dev_handle, data, 2, 100);
         
         vTaskDelay(pdMS_TO_TICKS(10));
-        ESP_LOGI(TAG, "PCA9685 初始化成功 (新版 I2C API)");
     }
 
     static void ActionTask(void* arg) {
@@ -339,9 +326,30 @@ private:
         otto_.SetTrims(left_leg, right_leg, left_foot, right_foot, left_hand, right_hand);
     }
 
+    // 闹钟独立任务函数
+    static void AlarmTask(void* arg) {
+        AlarmParams* params = static_cast<AlarmParams*>(arg);
+        vTaskDelay(pdMS_TO_TICKS(params->seconds * 1000));
+        
+        ESP_LOGI(TAG, "闹钟时间到！");
+        auto display = Board::GetInstance().GetDisplay();
+        if (display) display->SetChatMessage("system", "叮叮叮！闹钟时间到了！");
+        
+        if (params->controller) {
+            if (params->controller->has_hands_) {
+                params->controller->QueueAction(ACTION_HANDS_UP, 1, 500, 0, 0);
+            } else {
+                params->controller->QueueAction(ACTION_JUMP, 1, 500, 0, 0);
+            }
+        }
+        
+        delete params;
+        vTaskDelete(NULL);
+    }
+
 public:
     OttoController(const HardwareConfig& hw_config) : hw_config_(hw_config) {
-        InitPca9685(); // 初始化 PCA9685
+        InitPca9685(); 
         otto_.Init(
             hw_config.left_leg_pin, hw_config.right_leg_pin, 
             hw_config.left_foot_pin, hw_config.right_foot_pin, 
@@ -415,6 +423,7 @@ public:
                                QueueAction(ACTION_HOME, 1, 1000, 1, 0); return true;
                            });
 
+        // 🚨 优雅关机（修复重启）
         mcp_server.AddTool("self.system.shutdown", "关闭机器人电源并进入深度睡眠", PropertyList(),
                            [this](const PropertyList& properties) -> ReturnValue {
                                ESP_LOGI(TAG, "收到关机指令，准备进入深度睡眠...");
@@ -425,32 +434,25 @@ public:
                                auto backlight = Board::GetInstance().GetBacklight();
                                if (backlight) backlight->SetBrightness(0);
                                
-                               vTaskDelay(pdMS_TO_TICKS(1000));
+                               vTaskDelay(pdMS_TO_TICKS(100));
+                               
+                               // 清除所有唤醒源，防止关机黑屏瞬间被电平唤醒重启
+                               esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
                                esp_deep_sleep_start();
                                return true;
                            });
 
+        // 🚨 闹钟（修复卡死）
         mcp_server.AddTool("self.alarm.set", "设置一个倒计时闹钟或提醒",
             PropertyList({ Property("seconds", kPropertyTypeInteger, 10, 1, 86400) }),
             [this](const PropertyList& properties) -> ReturnValue {
                 int seconds = properties["seconds"].value<int>();
-                TimerHandle_t alarm_timer = xTimerCreate(
-                    "MyAlarm", pdMS_TO_TICKS(seconds * 1000), pdFALSE, (void*)this,
-                    [](TimerHandle_t xTimer) {
-                        OttoController* controller = (OttoController*)pvTimerGetTimerID(xTimer);
-                        auto display = Board::GetInstance().GetDisplay();
-                        if (display) display->SetChatMessage("system", "叮叮叮！闹钟时间到了！");
-                        if (controller) {
-                            if (controller->has_hands_) controller->QueueAction(ACTION_HANDS_UP, 1, 500, 0, 0);
-                            else controller->QueueAction(ACTION_JUMP, 1, 500, 0, 0);
-                        }
-                        xTimerDelete(xTimer, 0); 
-                    }
-                );
-                if (alarm_timer != nullptr) {
-                    xTimerStart(alarm_timer, 0);
-                    return "闹钟已设置，将在 " + std::to_string(seconds) + " 秒后提醒您。";
-                } else return "错误：内存不足，闹钟设置失败。";
+                
+                // 使用独立任务代替软件定时器
+                AlarmParams* params = new AlarmParams{this, seconds};
+                xTaskCreate(AlarmTask, "alarm_task", 4096, params, 5, nullptr);
+                
+                return "闹钟已设置，将在 " + std::to_string(seconds) + " 秒后提醒您。";
             });
 
         mcp_server.AddTool("self.otto.set_trim", "校准单个舵机位置。",

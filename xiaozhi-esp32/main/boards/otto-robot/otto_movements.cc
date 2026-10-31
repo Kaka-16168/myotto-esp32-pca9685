@@ -8,6 +8,11 @@
 #include <driver/i2c_master.h>
 #include <esp_log.h>
 
+// 🌟 修复报错：加上 DEG2RAD 宏定义
+#ifndef DEG2RAD
+#define DEG2RAD(g) ((g) * M_PI / 180.0)
+#endif
+
 static const char* TAG = "OttoMovements";
 
 #define HAND_HOME_POSITION 45

@@ -59,7 +59,7 @@ private:
         io_config.cs_gpio_num = hw_config_.display_cs_pin;
         io_config.dc_gpio_num = hw_config_.display_dc_pin;
         io_config.spi_mode = DISPLAY_SPI_MODE;
-        io_config.pclk_hz = 20 * 1000 * 1000; // 20MHz 刷新率
+        io_config.pclk_hz = 40 * 1000 * 1000;
         io_config.trans_queue_depth = 10;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
@@ -87,9 +87,15 @@ private:
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
             if (app.GetDeviceState() == kDeviceStateStarting) {
+                // 💡 在进入配网模式前，强制屏幕显示提示
+                if (display_) {
+                    display_->SetChatMessage("system", "等待配网中...");
+                }
+                // 调用基类的原生配网函数
                 EnterWifiConfigMode();
                 return;
             }
+            // 正常情况下按下按键触发对话
             app.ToggleChatState();
         });
     }
@@ -114,22 +120,7 @@ public:
         InitializeWebSocketControlServer();
     }
 
-    // ========================================================
-    // 🌟 新增：重写配网模式，解决配网不跳转/屏幕无提示的问题
-    // ========================================================
-    void EnterWifiConfigMode() override {
-        auto display = GetDisplay();
-        if (display) {
-            // 强制在屏幕上显示配网提示
-            display->SetChatMessage("system", "等待配网中，请连接WiFi...");
-        }
-        // 调用底层原生逻辑（开启 AP 热点等）
-        WifiBoard::EnterWifiConfigMode();
-    }
-    // ========================================================
-
     void InitializeAudioCodec() {
-        // 根据 config.h 中的 audio_use_simplex 配置，走 Simplex 模式
         if (hw_config_.audio_use_simplex) {
             audio_codec_ = new NoAudioCodecSimplex(
                 hw_config_.audio_input_sample_rate, hw_config_.audio_output_sample_rate,
@@ -148,7 +139,6 @@ public:
         : boot_button_(BOOT_BUTTON_GPIO),
           audio_codec_(nullptr) {
         
-        // 强制使用无摄像头版本配置
         hw_config_ = NON_CAMERA_VERSION_CONFIG;
         ESP_LOGI(TAG, "强制使用无摄像头版本配置 (NON_CAMERA_VERSION_CONFIG)");
 
@@ -158,7 +148,6 @@ public:
         InitializePowerManager();
         InitializeAudioCodec();
 
-        // 初始化舵机控制器
         InitializeOttoController();
         ws_control_server_ = nullptr;
         GetBacklight()->RestoreBrightness();
@@ -181,9 +170,6 @@ public:
         level = power_manager_->GetBatteryLevel();
         return true;
     }
-
-    // 因为没有摄像头，直接返回 nullptr 即可（重写基类虚函数）
-    virtual Camera* GetCamera() override { return nullptr; }
 };
 
 DECLARE_BOARD(OttoRobot);

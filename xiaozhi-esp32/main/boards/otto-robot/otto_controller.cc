@@ -7,6 +7,8 @@
 #include <driver/i2c_master.h> // 🚨 改为新版 I2C 驱动头文件
 #include <driver/gpio.h>
 #include <esp_sleep.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <freertos/timers.h>
 
 #include <cstdlib> 

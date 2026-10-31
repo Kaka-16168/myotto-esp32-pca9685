@@ -46,6 +46,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: otto-esp32s3-firmware
-          # ⚠️ 注意：这里结尾的中文句号“。”我已经帮你删掉了，防止找不到文件
+        
           path: xiaozhi-esp32/build/merged-binary.bin
           if-no-files-found: error

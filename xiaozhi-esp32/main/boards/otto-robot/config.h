@@ -29,6 +29,7 @@ struct HardwareConfig {
     adc_unit_t power_adc_unit;
     adc_channel_t power_adc_channel;
 
+    // 以下 6 个变量在 PCA9685 模式下代表 PCA9685 的通道号 (0-15)
     gpio_num_t right_leg_pin;
     gpio_num_t right_foot_pin;
     gpio_num_t left_leg_pin;
@@ -106,18 +107,21 @@ constexpr HardwareConfig CAMERA_VERSION_CONFIG = {
 // 以下为你定制的 NON_CAMERA_VERSION_CONFIG (PCA9685 版本)
 // ==========================================
 constexpr HardwareConfig NON_CAMERA_VERSION_CONFIG = {
-    .power_charge_detect_pin = GPIO_NUM_NC, // 原21改为NC，避开屏幕背光引脚
+    .power_charge_detect_pin = GPIO_NUM_NC, // 避开屏幕背光引脚
     .power_adc_unit = ADC_UNIT_2,
     .power_adc_channel = ADC_CHANNEL_3,
 
-    // 注意：如果你使用 PCA9685 (I2C) 来控制舵机，以下引脚其实不会被使用。
-    // 但为了防止底层代码调用报错，这里保留了未与其他功能冲突的引脚。
-    .right_leg_pin = GPIO_NUM_39,
-    .right_foot_pin = GPIO_NUM_38,
-    .left_leg_pin = GPIO_NUM_17,
-    .left_foot_pin = GPIO_NUM_18,
-    .left_hand_pin = GPIO_NUM_41,  // 原8改为41，避开 I2C
-    .right_hand_pin = GPIO_NUM_42, // 原12改为42，避开屏幕CLK
+    // ==========================================
+    // 🚨 注意：这里填的是 PCA9685 的通道号 (0-15)
+    // 已为你将左右腿、左右脚的通道互换
+    // ==========================================
+    .right_leg_pin = (gpio_num_t)2,   // 右腿 -> 原本左腿的通道 2
+    .right_foot_pin = (gpio_num_t)3,  // 右脚 -> 原本左脚的通道 3
+    .left_leg_pin = (gpio_num_t)0,    // 左腿 -> 原本右腿的通道 0
+    .left_foot_pin = (gpio_num_t)1,   // 左脚 -> 原本右脚的通道 1
+    
+    .left_hand_pin = (gpio_num_t)4,   // 左手 -> 通道 4 (如果没手部舵机填 -1)
+    .right_hand_pin = (gpio_num_t)5,  // 右手 -> 通道 5 (如果没手部舵机填 -1)
 
     .audio_input_sample_rate = 16000,
     .audio_output_sample_rate = 24000,
@@ -144,7 +148,7 @@ constexpr HardwareConfig NON_CAMERA_VERSION_CONFIG = {
     .display_rst_pin = GPIO_NUM_10,
     .display_cs_pin = GPIO_NUM_14,
 
-    // ---- PCA9685 预留 I2C 引脚 ----
+    // ---- PCA9685 I2C 引脚 (这里是真实的 ESP32 GPIO 引脚) ----
     .i2c_sda_pin = GPIO_NUM_8,
     .i2c_scl_pin = GPIO_NUM_9,
 };

@@ -17,7 +17,7 @@ struct HardwareConfig {
     adc_unit_t power_adc_unit;
     adc_channel_t power_adc_channel;
 
-    // 🌟 关键修改：这里的数字代表 PCA9685 的通道号，请和你的实际接线一一对应！
+    // 🌟 这里的声明顺序必须和下方赋值的顺序一致
     gpio_num_t right_leg_pin;
     gpio_num_t right_foot_pin;
     gpio_num_t left_leg_pin;
@@ -58,15 +58,15 @@ constexpr HardwareConfig NON_CAMERA_VERSION_CONFIG = {
     .power_adc_channel = ADC_CHANNEL_3,
 
     // =====================================================================
-    // 🌟 舵机通道映射 (请检查你的排线插在哪，就把数字改成几)
-    // 默认顺序：0=左腿, 1=右腿, 2=左脚, 3=右脚, 4=左手, 5=右手
+    // 🌟 修复了顺序问题，严格按照结构体声明顺序排列
+    // 请检查你的舵机线插在 PCA9685 的哪个口，就把数字改成几（0-15）
     // =====================================================================
-    .left_leg_pin = (gpio_num_t)0,   // 左腿插在 PCA9685 的 0 号口
-    .right_leg_pin = (gpio_num_t)1,  // 右腿插在 PCA9685 的 1 号口
-    .left_foot_pin = (gpio_num_t)2,  // 左脚插在 PCA9685 的 2 号口
-    .right_foot_pin = (gpio_num_t)3, // 右脚插在 PCA9685 的 3 号口
-    .left_hand_pin = (gpio_num_t)4,  // 左手插在 PCA9685 的 4 号口
-    .right_hand_pin = (gpio_num_t)5, // 右手插在 PCA9685 的 5 号口
+    .right_leg_pin = (gpio_num_t)1,  // 右腿
+    .right_foot_pin = (gpio_num_t)3, // 右脚
+    .left_leg_pin = (gpio_num_t)0,   // 左腿
+    .left_foot_pin = (gpio_num_t)2,  // 左脚
+    .left_hand_pin = (gpio_num_t)4,  // 左手
+    .right_hand_pin = (gpio_num_t)5, // 右手
 
     .audio_input_sample_rate = 16000,
     .audio_output_sample_rate = 24000,

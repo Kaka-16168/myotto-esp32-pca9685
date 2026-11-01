@@ -372,3 +372,9 @@ if ("${size}" AND "${offset}")
 else()
     message(STATUS "Assets partition not found, using v1 partition table")
 endif()
+
+# 强制回退 mbedtls 加密实现，规避 ESP-IDF v6.x 默认启用 PSA Crypto 导致的编译冲突
+target_compile_definitions(${COMPONENT_LIB} PRIVATE
+    CONFIG_MBEDTLS_PSA_CRYPTO_C=0
+    CONFIG_MBEDTLS_USE_PSA_CRYPTO=0
+)

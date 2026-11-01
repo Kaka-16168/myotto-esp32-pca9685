@@ -8,28 +8,16 @@
 #define OTTO_VERSION_CAMERA 1
 #define OTTO_VERSION_NO_CAMERA 2
 
-// 强制指定为无摄像头版本（因为你的外设中不包含摄像头）
 #ifndef OTTO_HARDWARE_VERSION
 #define OTTO_HARDWARE_VERSION OTTO_VERSION_NO_CAMERA
 #endif
-
-enum OttoCameraType {
-    OTTO_CAMERA_NONE = 0,
-    OTTO_CAMERA_OV2640 = 1,
-    OTTO_CAMERA_OV3660 = 2,
-    OTTO_CAMERA_UNKNOWN = 99,
-};
-
-#define OTTO_OV2640_PID_1 0x2640
-#define OTTO_OV2640_PID_2 0x2626
-#define OTTO_OV3660_PID 0x3660
 
 struct HardwareConfig {
     gpio_num_t power_charge_detect_pin;
     adc_unit_t power_adc_unit;
     adc_channel_t power_adc_channel;
 
-    // 以下 6 个变量在 PCA9685 模式下代表 PCA9685 的通道号 (0-15)
+    // 🌟 关键修改：这里的数字代表 PCA9685 的通道号，请和你的实际接线一一对应！
     gpio_num_t right_leg_pin;
     gpio_num_t right_foot_pin;
     gpio_num_t left_leg_pin;
@@ -64,64 +52,21 @@ struct HardwareConfig {
     gpio_num_t i2c_scl_pin;
 };
 
-constexpr HardwareConfig CAMERA_VERSION_CONFIG = {
-    .power_charge_detect_pin = GPIO_NUM_NC,
-    .power_adc_unit = ADC_UNIT_1,
-    .power_adc_channel = ADC_CHANNEL_1,
-
-    .right_leg_pin = GPIO_NUM_43,
-    .right_foot_pin = GPIO_NUM_44,
-    .left_leg_pin = GPIO_NUM_5,
-    .left_foot_pin = GPIO_NUM_6,
-    .left_hand_pin = GPIO_NUM_4,
-    .right_hand_pin = GPIO_NUM_7,
-
-    .audio_input_sample_rate = 16000,
-    .audio_output_sample_rate = 16000,
-    .audio_use_simplex = false,
-
-    .audio_i2s_gpio_ws = GPIO_NUM_40,
-    .audio_i2s_gpio_bclk = GPIO_NUM_42,
-    .audio_i2s_gpio_din = GPIO_NUM_41,
-    .audio_i2s_gpio_dout = GPIO_NUM_39,
-
-    .audio_i2s_mic_gpio_ws = GPIO_NUM_NC,
-    .audio_i2s_mic_gpio_sck = GPIO_NUM_NC,
-    .audio_i2s_mic_gpio_din = GPIO_NUM_NC,
-    .audio_i2s_spk_gpio_dout = GPIO_NUM_NC,
-    .audio_i2s_spk_gpio_bclk = GPIO_NUM_NC,
-    .audio_i2s_spk_gpio_lrck = GPIO_NUM_NC,
-
-    .display_backlight_pin = GPIO_NUM_38,
-    .display_mosi_pin = GPIO_NUM_45,
-    .display_clk_pin = GPIO_NUM_48,
-    .display_dc_pin = GPIO_NUM_47,
-    .display_rst_pin = GPIO_NUM_1,
-    .display_cs_pin = GPIO_NUM_NC,
-
-    .i2c_sda_pin = GPIO_NUM_15,
-    .i2c_scl_pin = GPIO_NUM_16,
-};
-
-// ==========================================
-// 以下为你定制的 NON_CAMERA_VERSION_CONFIG (PCA9685 版本)
-// ==========================================
 constexpr HardwareConfig NON_CAMERA_VERSION_CONFIG = {
-    .power_charge_detect_pin = GPIO_NUM_NC, // 避开屏幕背光引脚
+    .power_charge_detect_pin = GPIO_NUM_NC,
     .power_adc_unit = ADC_UNIT_2,
     .power_adc_channel = ADC_CHANNEL_3,
 
-    // ==========================================
-    // 🚨 注意：这里填的是 PCA9685 的通道号 (0-15)
-    // 已为你将左右腿、左右脚的通道互换
-    // ==========================================
-    .right_leg_pin = (gpio_num_t)1,   // 右腿 
-    .right_foot_pin = (gpio_num_t)3,  // 右脚 
-    .left_leg_pin = (gpio_num_t)0,    // 左腿 
-    .left_foot_pin = (gpio_num_t)2,   // 左脚 
-    
-    .left_hand_pin = (gpio_num_t)4,   // 左手 -> 通道 4 (如果没手部舵机填 -1)
-    .right_hand_pin = (gpio_num_t)5,  // 右手 -> 通道 5 (如果没手部舵机填 -1)
+    // =====================================================================
+    // 🌟 舵机通道映射 (请检查你的排线插在哪，就把数字改成几)
+    // 默认顺序：0=左腿, 1=右腿, 2=左脚, 3=右脚, 4=左手, 5=右手
+    // =====================================================================
+    .left_leg_pin = (gpio_num_t)0,   // 左腿插在 PCA9685 的 0 号口
+    .right_leg_pin = (gpio_num_t)1,  // 右腿插在 PCA9685 的 1 号口
+    .left_foot_pin = (gpio_num_t)2,  // 左脚插在 PCA9685 的 2 号口
+    .right_foot_pin = (gpio_num_t)3, // 右脚插在 PCA9685 的 3 号口
+    .left_hand_pin = (gpio_num_t)4,  // 左手插在 PCA9685 的 4 号口
+    .right_hand_pin = (gpio_num_t)5, // 右手插在 PCA9685 的 5 号口
 
     .audio_input_sample_rate = 16000,
     .audio_output_sample_rate = 24000,
@@ -132,7 +77,7 @@ constexpr HardwareConfig NON_CAMERA_VERSION_CONFIG = {
     .audio_i2s_gpio_din = GPIO_NUM_NC,
     .audio_i2s_gpio_dout = GPIO_NUM_NC,
 
-    // ---- 音频引脚配置 (匹配你的模块) ----
+    // 音频引脚
     .audio_i2s_mic_gpio_ws = GPIO_NUM_4,
     .audio_i2s_mic_gpio_sck = GPIO_NUM_5,
     .audio_i2s_mic_gpio_din = GPIO_NUM_6,
@@ -140,7 +85,7 @@ constexpr HardwareConfig NON_CAMERA_VERSION_CONFIG = {
     .audio_i2s_spk_gpio_bclk = GPIO_NUM_15,
     .audio_i2s_spk_gpio_lrck = GPIO_NUM_16,
 
-    // ---- 屏幕引脚配置 (匹配你的接线) ----
+    // 屏幕引脚
     .display_backlight_pin = GPIO_NUM_21,
     .display_mosi_pin = GPIO_NUM_11,
     .display_clk_pin = GPIO_NUM_12,
@@ -148,30 +93,11 @@ constexpr HardwareConfig NON_CAMERA_VERSION_CONFIG = {
     .display_rst_pin = GPIO_NUM_10,
     .display_cs_pin = GPIO_NUM_14,
 
-    // ---- PCA9685 I2C 引脚 (这里是真实的 ESP32 GPIO 引脚) ----
+    // I2C 引脚 (PCA9685)
     .i2c_sda_pin = GPIO_NUM_8,
     .i2c_scl_pin = GPIO_NUM_9,
 };
 
-#define CAMERA_XCLK (GPIO_NUM_3)
-#define CAMERA_PCLK (GPIO_NUM_10)
-#define CAMERA_VSYNC (GPIO_NUM_17)
-#define CAMERA_HSYNC (GPIO_NUM_18)
-#define CAMERA_D0 (GPIO_NUM_12)
-#define CAMERA_D1 (GPIO_NUM_14)
-#define CAMERA_D2 (GPIO_NUM_21)
-#define CAMERA_D3 (GPIO_NUM_13)
-#define CAMERA_D4 (GPIO_NUM_11)
-#define CAMERA_D5 (GPIO_NUM_9)
-#define CAMERA_D6 (GPIO_NUM_46)
-#define CAMERA_D7 (GPIO_NUM_8)
-#define CAMERA_PWDN (GPIO_NUM_NC)
-#define CAMERA_RESET (GPIO_NUM_NC)
-#define CAMERA_XCLK_FREQ (16000000)
-#define LEDC_TIMER (LEDC_TIMER_0)
-#define LEDC_CHANNEL (LEDC_CHANNEL_0)
-
-// 屏幕硬件特性
 #define LCD_TYPE_ST7789_SERIAL
 #define DISPLAY_WIDTH 240
 #define DISPLAY_HEIGHT 240

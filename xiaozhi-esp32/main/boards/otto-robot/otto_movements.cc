@@ -26,13 +26,16 @@ float EaseOutCubic(float t) {
     return 1.0f - inv * inv * inv;
 }
 
-// 🌟 核心修复：严格按传入的通道号进行发送，避免批量发送导致的错位
+// 单发一个舵机的 PWM (精准控制)
 void SetPcaPwm(uint8_t channel, int angle, int trim) {
     if (pca9685_dev_handle == nullptr) return;
 
     int target_angle = angle + trim;
-    if (target_angle < 0) target_angle = 0;
-    if (target_angle > 180) target_angle = 180;
+    
+    // 🌟 新增：严格限位，防止大模型给出超范围角度导致机械卡死乱转
+    // 物理安全范围一般设定在 15 度 到 165 度之间
+    if (target_angle < 15) target_angle = 15;
+    if (target_angle > 165) target_angle = 165;
 
     float pulse_us = 500.0f + (target_angle / 180.0f) * 2000.0f;
     uint16_t off_count = (uint16_t)((pulse_us / 20000.0f) * 4096.0f);
@@ -132,8 +135,6 @@ void Otto::MoveServos(int time, int servo_target[]) {
 }
 
 void Otto::MoveSingle(int position, int servo_number) {
-    if (position > 180) position = 90;
-    if (position < 0) position = 90;
     if (GetRestState() == true) SetRestState(false);
     if (servo_number >= 0 && servo_number < SERVO_COUNT && servo_pins_[servo_number] != -1) {
         SetPcaPwm((uint8_t)servo_pins_[servo_number], position, servo_trim_[servo_number]);
@@ -149,8 +150,6 @@ void Otto::OscillateServos(int amplitude[SERVO_COUNT], int offset[SERVO_COUNT], 
         for (int i = 0; i < SERVO_COUNT; i++) {
             if (servo_pins_[i] != -1) {
                 double angle = (offset[i] + 90) + amplitude[i] * sin((2 * M_PI / period) * t - phase_diff[i]);
-                if (angle < 0) angle = 0;
-                if (angle > 180) angle = 180;
                 SetPcaPwm((uint8_t)servo_pins_[i], (int)angle, servo_trim_[i]);
                 current_positions_[i] = (int)angle;
             }

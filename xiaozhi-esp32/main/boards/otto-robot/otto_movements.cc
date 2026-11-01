@@ -12,7 +12,9 @@
 #define DEG2RAD(g) ((g) * M_PI / 180.0)
 #endif
 
-static const char* TAG = "OttoMovements";
+// 🌟 修复：添加 __attribute__((unused)) 防止 -Werror 编译报错
+static const char* TAG __attribute__((unused)) = "OttoMovements";
+
 #define HAND_HOME_POSITION 45
 #define PCA9685_LED0_ON_L   0x06
 
@@ -203,7 +205,6 @@ void Otto::Home(bool hands_down) {
 bool Otto::GetRestState() { return is_otto_resting_; }
 void Otto::SetRestState(bool state) { is_otto_resting_ = state; }
 
-// 动作组... (完全保留原版动作代码)
 void Otto::Jump(float steps, int period) {
     int up[SERVO_COUNT] = {90, 90, 150, 30, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
     MoveServos(period, up);

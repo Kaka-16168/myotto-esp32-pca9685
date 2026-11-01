@@ -13,7 +13,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: espressif/idf:release-v6.1
+      # 使用官方推荐并验证过的稳定版本
+      image: espressif/idf:v6.0.2
     
     steps:
       - name: Checkout
@@ -23,6 +24,9 @@ jobs:
         shell: bash
         run: |
           source "$IDF_PATH/export.sh"
+          
+          # ⚠️ 注意：如果你的仓库根目录就是 xiaozhi-esp32 里面的内容，
+          # 请把下面这行 `cd xiaozhi-esp32` 删掉。
           cd xiaozhi-esp32
           
           # 1. 彻底清理旧的编译缓存

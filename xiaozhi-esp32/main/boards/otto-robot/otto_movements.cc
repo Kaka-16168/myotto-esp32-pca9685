@@ -26,11 +26,27 @@ float EaseOutCubic(float t) {
     return 1.0f - inv * inv * inv;
 }
 
-// 🌟 性能优化：批量写入 6 个舵机的数据，只发一次 I2C 请求
+// 单发一个舵机的 PWM (用于开机逐个归位)
+void SetSinglePcaPwm(uint8_t channel, int angle, int trim) {
+    if (pca9685_dev_handle == nullptr) return;
+
+    int target_angle = angle + trim;
+    if (target_angle < 0) target_angle = 0;
+    if (target_angle > 180) target_angle = 180;
+
+    float pulse_us = 500.0f + (target_angle / 180.0f) * 2000.0f;
+    uint16_t off_count = (uint16_t)((pulse_us / 20000.0f) * 4096.0f);
+
+    uint8_t reg = PCA9685_LED0_ON_L + 4 * channel;
+    uint8_t data[5] = {reg, 0, 0, (uint8_t)(off_count & 0xFF), (uint8_t)(off_count >> 8)};
+    
+    i2c_master_transmit(pca9685_dev_handle, data, 5, 100);
+}
+
+// 批量发 6 个舵机的 PWM (用于执行动作)
 void SetAllPcaPwm(int angles[SERVO_COUNT], int trims[SERVO_COUNT]) {
     if (pca9685_dev_handle == nullptr) return;
 
-    // 起始寄存器 0x06 (LED0_ON_L)
     uint8_t data[25];
     data[0] = PCA9685_LED0_ON_L; 
 
@@ -47,8 +63,6 @@ void SetAllPcaPwm(int angles[SERVO_COUNT], int trims[SERVO_COUNT]) {
         data[3 + i * 4] = (uint8_t)(off_count & 0xFF); // OFF_L
         data[4 + i * 4] = (uint8_t)(off_count >> 8);   // OFF_H
     }
-    
-    // 一次性发送 25 字节 (1字节寄存器地址 + 24字节舵机数据)
     i2c_master_transmit(pca9685_dev_handle, data, 25, 100);
 }
 }
@@ -84,8 +98,17 @@ void Otto::Init(int left_leg, int right_leg, int left_foot, int right_foot, int 
 
 void Otto::AttachServos() {
     int init_angles[SERVO_COUNT] = {90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
-    SetAllPcaPwm(init_angles, servo_trim_);
-    for (int i = 0; i < SERVO_COUNT; i++) current_positions_[i] = init_angles[i];
+    
+    // 🌟 核心修复：逐个归位，每次间隔 300ms，防止电流过大导致 ESP32 重启
+    ESP_LOGI(TAG, "开始逐个归位舵机，防止电压骤降...");
+    for (int i = 0; i < SERVO_COUNT; i++) {
+        if (servo_pins_[i] != -1) {
+            SetSinglePcaPwm(servo_pins_[i], init_angles[i], servo_trim_[i]);
+            current_positions_[i] = init_angles[i];
+            vTaskDelay(pdMS_TO_TICKS(300)); 
+        }
+    }
+    ESP_LOGI(TAG, "所有舵机归位完成");
 }
 
 void Otto::DetachServos() {}
@@ -152,7 +175,7 @@ void Otto::OscillateServos(int amplitude[SERVO_COUNT], int offset[SERVO_COUNT], 
             current_positions_[i] = (int)angle;
         }
         SetAllPcaPwm(current_target, servo_trim_);
-        vTaskDelay(pdMS_TO_TICKS(10)); // 延长间隔，减少总线拥堵
+        vTaskDelay(pdMS_TO_TICKS(10)); 
     }
     vTaskDelay(pdMS_TO_TICKS(10));
 }
@@ -200,7 +223,7 @@ void Otto::Home(bool hands_down) {
 bool Otto::GetRestState() { return is_otto_resting_; }
 void Otto::SetRestState(bool state) { is_otto_resting_ = state; }
 
-// 动作方法（省略非核心部分，请保留你之前成功的动作代码）
+// ---------------- 动作代码 ----------------
 void Otto::Jump(float steps, int period) {
     int up[SERVO_COUNT] = {90, 90, 150, 30, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
     MoveServos(period, up);

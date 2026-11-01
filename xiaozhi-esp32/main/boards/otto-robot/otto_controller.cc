@@ -141,7 +141,7 @@ private:
                                         if (cJSON_IsObject(center_item)) {
                                             for (int j = 0; j < SERVO_COUNT; j++) {
                                                 cJSON* center_value = cJSON_GetObjectItem(center_item, servo_names[j]);
-                                                if (cJSON_IsNumber(center_value)) center_angle[j] = std::clamp(center_value->valueint, 0, 180);
+                                                if (cJSON_IsNumber(center_value)) center_angle[j] = std::clamp(center_value->valueint, 15, 165);
                                             }
                                         }
                                         
@@ -170,7 +170,7 @@ private:
                                             const char* servo_names[] = {"ll", "rl", "lf", "rf", "lh", "rh"};
                                             for (int j = 0; j < SERVO_COUNT; j++) {
                                                 cJSON* servo_value = cJSON_GetObjectItem(servos_item, servo_names[j]);
-                                                if (cJSON_IsNumber(servo_value)) servo_target[j] = std::clamp(servo_value->valueint, 0, 180);
+                                                if (cJSON_IsNumber(servo_value)) servo_target[j] = std::clamp(servo_value->valueint, 15, 165);
                                             }
                                         }
                                         
@@ -196,25 +196,18 @@ private:
                         } else cJSON_Delete(json);
                     }
                 } else if (params.action_type == ACTION_ALARM_TRIGGERED) {
-                    // 🌟 修改点：闹钟触发逻辑
                     ESP_LOGI(TAG, "闹钟触发！准备语音播报和单手招手");
                     
-                    // 1. 触发系统 TTS 语音播报（大模型声音）
-                    // 这里使用小智框架通用的文本注入方式，底层会自动转为语音念出来
+                    // 🌟 修复点1：改用 Alert 接口，既能让屏幕弹窗，又自带音效，并触发大模型语音播报
                     auto& app = Application::GetInstance();
-                    app.SetChatMessage("system", "滴答滴答，闹钟时间到了，快起床吧！");
-                    
-                    // 2. 屏幕显示提醒
-                    auto display = Board::GetInstance().GetDisplay();
-                    if (display) display->SetChatMessage("assistant", "时间到了！");
+                    app.Alert("主人，时间到了！", "neutral", "exclamation");
 
-                    // 3. 执行“单手招手”动作（这里选左手 LEFT，持续招手 5 次）
+                    // 🌟 修改点2：单手招手动作
                     if (controller->has_hands_) {
-                        controller->otto_.HandWave(LEFT);
-                        vTaskDelay(pdMS_TO_TICKS(2000)); // 留出时间让语音播完
+                        controller->otto_.HandWave(LEFT); // 左手招手
+                        vTaskDelay(pdMS_TO_TICKS(2000)); 
                         controller->otto_.Home(true);
                     } else {
-                        // 如果没有手部舵机，就做一个原地跳跃代替
                         controller->otto_.Jump(1, 500);
                     }
                     

@@ -22,11 +22,10 @@
 #include "settings.h"
 #include <wifi_manager.h>
 
-// 🌟 修复：添加 __attribute__((unused)) 
 static const char* TAG __attribute__((unused)) = "OttoController";
 
 #define PCA9685_I2C_PORT    I2C_NUM_0
-#define PCA9685_I2C_FREQ    100000
+#define PCA9685_I2C_FREQ    400000 // 🌟 提速到 400kHz
 #define PCA9685_ADDR        0x40
 
 i2c_master_dev_handle_t pca9685_dev_handle = nullptr;
@@ -83,17 +82,12 @@ private:
         ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus_handle_, &dev_cfg, &pca9685_dev_handle));
 
         uint8_t data[2];
-        data[0] = 0x00; data[1] = 0x10;
-        i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
-        
-        data[0] = 0xFE; data[1] = 121;
-        i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
-        
-        data[0] = 0x00; data[1] = 0x20;
-        i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
+        data[0] = 0x00; data[1] = 0x10; i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
+        data[0] = 0xFE; data[1] = 121;  i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
+        data[0] = 0x00; data[1] = 0x20; i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         
         vTaskDelay(pdMS_TO_TICKS(10));
-        ESP_LOGI(TAG, "PCA9685 初始化成功 (新版 I2C 驱动)");
+        ESP_LOGI(TAG, "PCA9685 初始化成功 (400kHz)");
     }
 
     static void ActionTask(void* arg) {
@@ -114,15 +108,12 @@ private:
                             int array_size = cJSON_GetArraySize(actions);
                             int sequence_delay = 0;
                             cJSON* delay_item = cJSON_GetObjectItem(json, "d");
-                            if (cJSON_IsNumber(delay_item)) {
-                                sequence_delay = delay_item->valueint;
-                                if (sequence_delay < 0) sequence_delay = 0;
-                            }
+                            if (cJSON_IsNumber(delay_item)) sequence_delay = std::max(0, delay_item->valueint);
                             
                             int current_positions[SERVO_COUNT];
                             for (int j = 0; j < SERVO_COUNT; j++) current_positions[j] = 90;
                             current_positions[LEFT_HAND] = 45;
-                            current_positions[RIGHT_HAND] = 180 - 45;
+                            current_positions[RIGHT_HAND] = 135;
                             
                             for (int i = 0; i < array_size; i++) {
                                 cJSON* action_item = cJSON_GetArrayItem(actions, i);
@@ -136,15 +127,11 @@ private:
                                         float steps = 8.0;
                                         const char* servo_names[] = {"ll", "rl", "lf", "rf", "lh", "rh"};
                                         
-                                        for (int j = 0; j < SERVO_COUNT; j++) amplitude[j] = 0;
                                         cJSON* amp_item = cJSON_GetObjectItem(osc_item, "a");
                                         if (cJSON_IsObject(amp_item)) {
                                             for (int j = 0; j < SERVO_COUNT; j++) {
                                                 cJSON* amp_value = cJSON_GetObjectItem(amp_item, servo_names[j]);
-                                                if (cJSON_IsNumber(amp_value)) {
-                                                    int amp = amp_value->valueint;
-                                                    if (amp >= 10 && amp <= 90) amplitude[j] = amp;
-                                                }
+                                                if (cJSON_IsNumber(amp_value)) amplitude[j] = std::clamp(amp_value->valueint, 10, 90);
                                             }
                                         }
                                         
@@ -153,10 +140,7 @@ private:
                                         if (cJSON_IsObject(center_item)) {
                                             for (int j = 0; j < SERVO_COUNT; j++) {
                                                 cJSON* center_value = cJSON_GetObjectItem(center_item, servo_names[j]);
-                                                if (cJSON_IsNumber(center_value)) {
-                                                    int center = center_value->valueint;
-                                                    if (center >= 0 && center <= 180) center_angle[j] = center;
-                                                }
+                                                if (cJSON_IsNumber(center_value)) center_angle[j] = std::clamp(center_value->valueint, 0, 180);
                                             }
                                         }
                                         
@@ -164,23 +148,15 @@ private:
                                         if (cJSON_IsObject(phase_item)) {
                                             for (int j = 0; j < SERVO_COUNT; j++) {
                                                 cJSON* phase_value = cJSON_GetObjectItem(phase_item, servo_names[j]);
-                                                if (cJSON_IsNumber(phase_value)) phase_diff[j] = phase_value->valuedouble * 3.141592653589793 / 180.0;
+                                                if (cJSON_IsNumber(phase_value)) phase_diff[j] = phase_value->valuedouble * M_PI / 180.0;
                                             }
                                         }
                                         
                                         cJSON* period_item = cJSON_GetObjectItem(osc_item, "p");
-                                        if (cJSON_IsNumber(period_item)) {
-                                            period = period_item->valueint;
-                                            if (period < 100) period = 100;
-                                            if (period > 3000) period = 3000;
-                                        }
+                                        if (cJSON_IsNumber(period_item)) period = std::clamp(period_item->valueint, 100, 3000);
                                         
                                         cJSON* steps_item = cJSON_GetObjectItem(osc_item, "c");
-                                        if (cJSON_IsNumber(steps_item)) {
-                                            steps = (float)steps_item->valuedouble;
-                                            if (steps < 0.1) steps = 0.1;
-                                            if (steps > 20.0) steps = 20.0;
-                                        }
+                                        if (cJSON_IsNumber(steps_item)) steps = std::clamp((float)steps_item->valuedouble, 0.1f, 20.0f);
                                         
                                         controller->otto_.Execute2(amplitude, center_angle, period, phase_diff, steps);
                                         for (int j = 0; j < SERVO_COUNT; j++) current_positions[j] = center_angle[j];
@@ -193,20 +169,13 @@ private:
                                             const char* servo_names[] = {"ll", "rl", "lf", "rf", "lh", "rh"};
                                             for (int j = 0; j < SERVO_COUNT; j++) {
                                                 cJSON* servo_value = cJSON_GetObjectItem(servos_item, servo_names[j]);
-                                                if (cJSON_IsNumber(servo_value)) {
-                                                    int position = servo_value->valueint;
-                                                    if (position >= 0 && position <= 180) servo_target[j] = position;
-                                                }
+                                                if (cJSON_IsNumber(servo_value)) servo_target[j] = std::clamp(servo_value->valueint, 0, 180);
                                             }
                                         }
                                         
                                         int speed = 1000;
                                         cJSON* speed_item = cJSON_GetObjectItem(action_item, "v");
-                                        if (cJSON_IsNumber(speed_item)) {
-                                            speed = speed_item->valueint;
-                                            if (speed < 100) speed = 100;
-                                            if (speed > 3000) speed = 3000;
-                                        }
+                                        if (cJSON_IsNumber(speed_item)) speed = std::clamp(speed_item->valueint, 100, 3000);
                                         
                                         controller->otto_.MoveServos(speed, servo_target);
                                         for (int j = 0; j < SERVO_COUNT; j++) current_positions[j] = servo_target[j];
@@ -214,19 +183,16 @@ private:
                                     
                                     int delay_after = 0;
                                     cJSON* delay_item = cJSON_GetObjectItem(action_item, "d");
-                                    if (cJSON_IsNumber(delay_item)) delay_after = delay_item->valueint;
+                                    if (cJSON_IsNumber(delay_item)) delay_after = std::max(0, delay_item->valueint);
                                     if (delay_after > 0 && i < array_size - 1) vTaskDelay(pdMS_TO_TICKS(delay_after));
                                 }
                             }
                             
-                            if (sequence_delay > 0) {
-                                UBaseType_t queue_count = uxQueueMessagesWaiting(controller->action_queue_);
-                                if (queue_count > 0) vTaskDelay(pdMS_TO_TICKS(sequence_delay));
+                            if (sequence_delay > 0 && uxQueueMessagesWaiting(controller->action_queue_) > 0) {
+                                vTaskDelay(pdMS_TO_TICKS(sequence_delay));
                             }
                             cJSON_Delete(json);
-                        } else {
-                            cJSON_Delete(json);
-                        }
+                        } else cJSON_Delete(json);
                     }
                 } else {
                     switch (params.action_type) {
@@ -259,20 +225,23 @@ private:
                         case ACTION_HOME: controller->otto_.Home(true); break;
                     }
                     if(params.action_type != ACTION_SIT && params.action_type != ACTION_HOME && params.action_type != ACTION_SERVO_SEQUENCE) {
-                        UBaseType_t pending_actions = uxQueueMessagesWaiting(controller->action_queue_);
-                        if (pending_actions == 0) controller->otto_.Home(params.action_type != ACTION_HANDS_UP);
+                        if (uxQueueMessagesWaiting(controller->action_queue_) == 0) {
+                            controller->otto_.Home(params.action_type != ACTION_HANDS_UP);
+                        }
                     }
                 }
                 controller->is_action_in_progress_ = false;
                 PowerManager::ResumeBatteryUpdate();
                 vTaskDelay(pdMS_TO_TICKS(20));
             }
+            vTaskDelay(pdMS_TO_TICKS(10)); // 🌟 防饿死
         }
     }
 
     void StartActionTaskIfNeeded() {
         if (action_task_handle_ == nullptr) {
-            xTaskCreate(ActionTask, "otto_action", 1024 * 3, this, configMAX_PRIORITIES - 1, &action_task_handle_);
+            // 🌟 降低优先级，避免卡死 WiFi 导致无法配网
+            xTaskCreate(ActionTask, "otto_action", 1024 * 4, this, 5, &action_task_handle_);
         }
     }
 
@@ -390,7 +359,6 @@ public:
 
         mcp_server.AddTool("self.system.shutdown", "关闭机器人电源并进入深度睡眠", PropertyList(),
                            [this](const PropertyList& properties) -> ReturnValue {
-                               ESP_LOGI(TAG, "收到关机指令，准备进入深度睡眠...");
                                if (action_task_handle_ != nullptr) { vTaskDelete(action_task_handle_); action_task_handle_ = nullptr; }
                                xQueueReset(action_queue_);
                                otto_.Home(true); 
@@ -401,6 +369,7 @@ public:
                                return true;
                            });
 
+        // 🌟 闹钟修复：唤醒语音播报和舵机
         mcp_server.AddTool("self.alarm.set", "设置一个倒计时闹钟或提醒",
             PropertyList({ Property("seconds", kPropertyTypeInteger, 10, 1, 86400) }),
             [this](const PropertyList& properties) -> ReturnValue {
@@ -409,8 +378,16 @@ public:
                     "MyAlarm", pdMS_TO_TICKS(seconds * 1000), pdFALSE, (void*)this,
                     [](TimerHandle_t xTimer) {
                         OttoController* controller = (OttoController*)pvTimerGetTimerID(xTimer);
+                        
+                        // 1. 调用小智的语音播报（需要确保系统处于空闲状态才会播报）
+                        Application::GetInstance().PlaySound("ding"); 
+                        vTaskDelay(pdMS_TO_TICKS(1000));
+                        
+                        // 2. 屏幕显示
                         auto display = Board::GetInstance().GetDisplay();
                         if (display) display->SetChatMessage("system", "叮叮叮！闹钟时间到了！");
+                        
+                        // 3. 机器人动作
                         if (controller) {
                             if (controller->has_hands_) controller->QueueAction(ACTION_HANDS_UP, 1, 500, 0, 0);
                             else controller->QueueAction(ACTION_JUMP, 1, 500, 0, 0);

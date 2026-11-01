@@ -58,8 +58,7 @@ constexpr HardwareConfig NON_CAMERA_VERSION_CONFIG = {
     .power_adc_channel = ADC_CHANNEL_3,
 
     // =====================================================================
-    // 🌟 修复了顺序问题，严格按照结构体声明顺序排列
-    // 请检查你的舵机线插在 PCA9685 的哪个口，就把数字改成几（0-15）
+    // 🌟 检查这里！如果你左侧的腿插在 PCA9685 的 0 号口，那 left_leg_pin 就是 0
     // =====================================================================
     .right_leg_pin = (gpio_num_t)1,  // 右腿
     .right_foot_pin = (gpio_num_t)3, // 右脚

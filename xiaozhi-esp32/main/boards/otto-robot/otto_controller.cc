@@ -25,7 +25,7 @@
 static const char* TAG __attribute__((unused)) = "OttoController";
 
 #define PCA9685_I2C_PORT    I2C_NUM_0
-#define PCA9685_I2C_FREQ    100000 // 100kHz 提升稳定性防错乱
+#define PCA9685_I2C_FREQ    100000
 #define PCA9685_ADDR        0x40
 
 i2c_master_dev_handle_t pca9685_dev_handle = nullptr;
@@ -59,7 +59,7 @@ private:
         ACTION_TAKEOFF = 21, ACTION_FITNESS = 22, ACTION_GREETING = 23,
         ACTION_SHY = 24, ACTION_SHOWCASE = 28, ACTION_HOME = 17,
         ACTION_SERVO_SEQUENCE = 18, ACTION_WHIRLWIND_LEG = 19,
-        ACTION_ALARM_TRIGGERED = 99 // 🌟 新增闹钟触发动作
+        ACTION_ALARM_TRIGGERED = 99 
     };
 
     void InitPca9685() {
@@ -89,7 +89,6 @@ private:
         data[0] = 0x00; data[1] = 0x20; i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         
         vTaskDelay(pdMS_TO_TICKS(10));
-        ESP_LOGI(TAG, "PCA9685 初始化成功 (100kHz, 推挽输出)");
     }
 
     static void ActionTask(void* arg) {
@@ -197,18 +196,16 @@ private:
                         } else cJSON_Delete(json);
                     }
                 } else if (params.action_type == ACTION_ALARM_TRIGGERED) {
-                    // 🌟 闹钟处理逻辑（在安全的任务上下文中执行）
                     ESP_LOGI(TAG, "闹钟触发！");
                     auto display = Board::GetInstance().GetDisplay();
                     if (display) display->SetChatMessage("system", "叮叮叮！闹钟时间到了！");
                     
-                    // 强行打开功放并播放 3 次提示音
+                    // 🌟 连续播放 3 次闹钟音效
                     for (int i = 0; i < 3; i++) {
                         Application::GetInstance().PlaySound("exclamation");
-                        vTaskDelay(pdMS_TO_TICKS(800));
+                        vTaskDelay(pdMS_TO_TICKS(1000));
                     }
                     
-                    // 配合动作
                     if (controller->has_hands_) controller->otto_.HandsUp(500, 0);
                     else controller->otto_.Jump(1, 500);
                     
@@ -386,7 +383,6 @@ public:
                                return true;
                            });
 
-        // 🌟 修复后的闹钟逻辑：只入队，不在定时器里处理复杂音频
         mcp_server.AddTool("self.alarm.set", "设置一个倒计时闹钟或提醒",
             PropertyList({ Property("seconds", kPropertyTypeInteger, 10, 1, 86400) }),
             [this](const PropertyList& properties) -> ReturnValue {
@@ -395,7 +391,6 @@ public:
                     "MyAlarm", pdMS_TO_TICKS(seconds * 1000), pdFALSE, (void*)this,
                     [](TimerHandle_t xTimer) {
                         OttoController* controller = (OttoController*)pvTimerGetTimerID(xTimer);
-                        // 仅将闹钟作为任务丢入动作队列，由 ActionTask 去执行发声和安全动作
                         if (controller) {
                             controller->QueueAction(ACTION_ALARM_TRIGGERED, 0, 0, 0, 0);
                         }

@@ -13,8 +13,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: espressif/idf:v6.0.2 # 保持 v6.0.2 稳定版
-
+      # 使用项目官方 CI 和文档推荐的稳定版本
+      image: espressif/idf:release-v6.1
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,39 +25,31 @@ jobs:
         run: |
           source "$IDF_PATH/export.sh"
           
-          # 如果你的仓库根目录就是 xiaozhi-esp32 里面的内容，请删除下面这行
+          # ⚠️ 如果你的仓库根目录直接是 xiaozhi-esp32 的内容，请删除下面这行
           cd xiaozhi-esp32
           
+          # 1. 彻底清理旧的编译缓存
           idf.py fullclean
           rm -f sdkconfig
           
-          # 1. 指定板子为 Otto
+          # 2. 使用项目自带的 build.py 脚本进行编译，它会自动处理配置
+          #    我们只需要在这里覆盖必要的配置项
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
-          
-          # 2. 开启内存与网络支持 (N16R8 必备)
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
-          
-          # 3. 防止屏幕花屏 (SPI ISR 驻留 IRAM)
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 4. 🌟 开启官方默认唤醒词 (带 AFE 音频前端)
+          # 开启官方默认唤醒词 (带 AFE 音频前端)
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           
-          # 5. 关闭 BluFi 与自定义唤醒词，减少依赖
+          # 关闭 BluFi 与自定义唤醒词，减少不必要依赖和潜在的冲突
           echo "CONFIG_USE_ESP_BLUFI_WIFI_PROVISIONING=n" >> sdkconfig.defaults
           echo "CONFIG_USE_CUSTOM_WAKE_WORD=n" >> sdkconfig.defaults
           
-          # 6. 核心修复：强制禁用 p256-m 驱动，绕过 ESP-IDF v6.x 的 Mbed TLS 编译冲突
-          echo "CONFIG_MBEDTLS_PSA_P256M_DRIVER_ENABLED=n" >> sdkconfig.defaults
-          echo "CONFIG_MBEDTLS_PSA_CRYPTO_C=n" >> sdkconfig.defaults
-          
-          # 7. 开始编译
-          idf.py set-target esp32s3
-          idf.py build
-          idf.py merge-bin
+          # 3. 调用官方脚本编译 Otto 板子
+          python scripts/build.py otto-robot
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

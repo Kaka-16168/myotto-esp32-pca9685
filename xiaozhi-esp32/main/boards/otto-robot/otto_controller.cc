@@ -22,13 +22,13 @@
 #include "settings.h"
 #include <wifi_manager.h>
 
-#define TAG "OttoController"
+// 🌟 修复：添加 __attribute__((unused)) 
+static const char* TAG __attribute__((unused)) = "OttoController";
 
 #define PCA9685_I2C_PORT    I2C_NUM_0
 #define PCA9685_I2C_FREQ    100000
 #define PCA9685_ADDR        0x40
 
-// 全局 I2C 设备句柄供底层调用
 i2c_master_dev_handle_t pca9685_dev_handle = nullptr;
 
 class OttoController {
@@ -331,7 +331,6 @@ public:
     void RegisterMcpTools() {
         auto& mcp_server = McpServer::GetInstance();
         
-        // 动作指令工具
         mcp_server.AddTool("self.otto.action", "执行机器人动作...",
                            PropertyList({
                                Property("action", kPropertyTypeString, "sit"),
@@ -375,7 +374,6 @@ public:
                                return true;
                            });
 
-        // 舵机序列工具
         mcp_server.AddTool("self.otto.servo_sequences", "AI自定义动作编程（即兴动作）。",
             PropertyList({Property("sequence", kPropertyTypeString, "{\"a\":[{\"s\":{\"ll\":90,\"rl\":90},\"v\":1000}]}")}),
             [this](const PropertyList& properties) -> ReturnValue {
@@ -383,7 +381,6 @@ public:
                 return true;
             });
 
-        // 停止并复位
         mcp_server.AddTool("self.otto.stop", "立即停止所有动作并复位", PropertyList(),
                            [this](const PropertyList& properties) -> ReturnValue {
                                if (action_task_handle_ != nullptr) { vTaskDelete(action_task_handle_); action_task_handle_ = nullptr; }
@@ -391,7 +388,6 @@ public:
                                QueueAction(ACTION_HOME, 1, 1000, 1, 0); return true;
                            });
 
-        // 优雅关机
         mcp_server.AddTool("self.system.shutdown", "关闭机器人电源并进入深度睡眠", PropertyList(),
                            [this](const PropertyList& properties) -> ReturnValue {
                                ESP_LOGI(TAG, "收到关机指令，准备进入深度睡眠...");
@@ -405,7 +401,6 @@ public:
                                return true;
                            });
 
-        // 闹钟工具
         mcp_server.AddTool("self.alarm.set", "设置一个倒计时闹钟或提醒",
             PropertyList({ Property("seconds", kPropertyTypeInteger, 10, 1, 86400) }),
             [this](const PropertyList& properties) -> ReturnValue {
@@ -429,7 +424,6 @@ public:
                 } else return "错误：内存不足，闹钟设置失败。";
             });
 
-        // 微调与状态
         mcp_server.AddTool("self.otto.set_trim", "校准单个舵机位置。",
             PropertyList({Property("servo_type", kPropertyTypeString, "left_leg"), Property("trim_value", kPropertyTypeInteger, 0, -50, 50)}),
             [this](const PropertyList& properties) -> ReturnValue {

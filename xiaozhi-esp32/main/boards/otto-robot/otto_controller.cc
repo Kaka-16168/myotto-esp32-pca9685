@@ -1,12 +1,11 @@
-/*
-    Otto机器人控制器 - MCP协议版本 (PCA9685 新版 I2C 驱动版 + 优雅关机 + 闹钟)
-*/
-
 #include <cJSON.h>
 #include <esp_log.h>
-#include <driver/i2c_master.h> // 使用新版 I2C 头文件
+#include <driver/i2c_master.h>
 #include <driver/gpio.h>
 #include <esp_sleep.h>
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <freertos/timers.h>
 
 #include <cstdlib> 
@@ -15,7 +14,7 @@
 #include "application.h"
 #include "board.h"
 #include "config.h"
-#include "display/display.h" // 修复 Display incomplete type 报错
+#include "display/display.h"
 #include "mcp_server.h"
 #include "otto_movements.h"
 #include "power_manager.h"
@@ -25,11 +24,12 @@
 
 #define TAG "OttoController"
 
-// --- PCA9685 配置区 ---
 #define PCA9685_I2C_PORT    I2C_NUM_0
 #define PCA9685_I2C_FREQ    100000
 #define PCA9685_ADDR        0x40
-// ----------------------
+
+// 全局 I2C 设备句柄供底层调用
+i2c_master_dev_handle_t pca9685_dev_handle = nullptr;
 
 class OttoController {
 private:
@@ -40,7 +40,6 @@ private:
     bool is_action_in_progress_ = false;
     HardwareConfig hw_config_;
     i2c_master_bus_handle_t i2c_bus_handle_ = nullptr;
-    i2c_master_dev_handle_t pca9685_dev_handle_ = nullptr;
 
     struct OttoActionParams {
         int action_type;
@@ -63,7 +62,6 @@ private:
         ACTION_SERVO_SEQUENCE = 18, ACTION_WHIRLWIND_LEG = 19
     };
 
-    // 新版 I2C 初始化
     void InitPca9685() {
         i2c_master_bus_config_t i2c_bus_cfg = {
             .i2c_port = PCA9685_I2C_PORT,
@@ -82,18 +80,17 @@ private:
             .device_address = PCA9685_ADDR,
             .scl_speed_hz = PCA9685_I2C_FREQ,
         };
-        ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus_handle_, &dev_cfg, &pca9685_dev_handle_));
+        ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus_handle_, &dev_cfg, &pca9685_dev_handle));
 
-        // 初始化写寄存器操作 (MODE1 = 0x00, PRESCALE = 0xFE)
         uint8_t data[2];
-        data[0] = 0x00; data[1] = 0x10; // 睡眠模式
-        i2c_master_transmit(pca9685_dev_handle_, data, 2, -1);
+        data[0] = 0x00; data[1] = 0x10;
+        i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         
-        data[0] = 0xFE; data[1] = 121;  // 50Hz
-        i2c_master_transmit(pca9685_dev_handle_, data, 2, -1);
+        data[0] = 0xFE; data[1] = 121;
+        i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         
-        data[0] = 0x00; data[1] = 0x20; // 唤醒并开启自动递增
-        i2c_master_transmit(pca9685_dev_handle_, data, 2, -1);
+        data[0] = 0x00; data[1] = 0x20;
+        i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         
         vTaskDelay(pdMS_TO_TICKS(10));
         ESP_LOGI(TAG, "PCA9685 初始化成功 (新版 I2C 驱动)");
@@ -334,8 +331,152 @@ public:
     void RegisterMcpTools() {
         auto& mcp_server = McpServer::GetInstance();
         
-        // ... (保留原 MCP 工具注册逻辑，这里省略未改动的部分以节省篇幅，直接复制之前的 RegisterMcpTools 内部代码即可)
-        // 提示：只要确保包含了 #include "display/display.h" 就不会有之前截图 442 行的报错。
+        // 动作指令工具
+        mcp_server.AddTool("self.otto.action", "执行机器人动作...",
+                           PropertyList({
+                               Property("action", kPropertyTypeString, "sit"),
+                               Property("steps", kPropertyTypeInteger, 3, 1, 100),
+                               Property("speed", kPropertyTypeInteger, 700, 100, 3000),
+                               Property("direction", kPropertyTypeInteger, 1, -1, 1),
+                               Property("amount", kPropertyTypeInteger, 30, 0, 170),
+                               Property("arm_swing", kPropertyTypeInteger, 50, 0, 170)
+                           }),
+                           [this](const PropertyList& properties) -> ReturnValue {
+                               std::string action = properties["action"].value<std::string>();
+                               int steps = properties["steps"].value<int>();
+                               int speed = properties["speed"].value<int>();
+                               int direction = properties["direction"].value<int>();
+                               int amount = properties["amount"].value<int>();
+                               int arm_swing = properties["arm_swing"].value<int>();
+
+                               if (action == "walk") QueueAction(ACTION_WALK, steps, speed, direction, arm_swing);
+                               else if (action == "turn") QueueAction(ACTION_TURN, steps, speed, direction, arm_swing);
+                               else if (action == "jump") QueueAction(ACTION_JUMP, steps, speed, 0, 0);
+                               else if (action == "swing") QueueAction(ACTION_SWING, steps, speed, 0, amount);
+                               else if (action == "moonwalk") QueueAction(ACTION_MOONWALK, steps, speed, direction, amount);
+                               else if (action == "bend") QueueAction(ACTION_BEND, steps, speed, direction, 0);
+                               else if (action == "shake_leg") QueueAction(ACTION_SHAKE_LEG, steps, speed, direction, 0);
+                               else if (action == "updown") QueueAction(ACTION_UPDOWN, steps, speed, 0, amount);
+                               else if (action == "whirlwind_leg") QueueAction(ACTION_WHIRLWIND_LEG, steps, speed, 0, amount);
+                               else if (action == "sit") QueueAction(ACTION_SIT, 1, 0, 0, 0);
+                               else if (action == "showcase") QueueAction(ACTION_SHOWCASE, 1, 0, 0, 0);
+                               else if (action == "home") QueueAction(ACTION_HOME, 1, 1000, 1, 0);
+                               else if (action == "hands_up") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_HANDS_UP, 1, speed, direction, 0); }
+                               else if (action == "hands_down") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_HANDS_DOWN, 1, speed, direction, 0); }
+                               else if (action == "hand_wave") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_HAND_WAVE, 1, 0, 0, direction); }
+                               else if (action == "windmill") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_WINDMILL, steps, speed, 0, amount); }
+                               else if (action == "takeoff") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_TAKEOFF, steps, speed, 0, amount); }
+                               else if (action == "fitness") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_FITNESS, steps, speed, 0, amount); }
+                               else if (action == "greeting") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_GREETING, steps, 0, direction, 0); }
+                               else if (action == "shy") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_SHY, steps, 0, direction, 0); }
+                               else if (action == "radio_calisthenics") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_RADIO_CALISTHENICS, 1, 0, 0, 0); }
+                               else if (action == "magic_circle") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_MAGIC_CIRCLE, 1, 0, 0, 0); }
+                               else return "错误：无效的动作名称。";
+                               return true;
+                           });
+
+        // 舵机序列工具
+        mcp_server.AddTool("self.otto.servo_sequences", "AI自定义动作编程（即兴动作）。",
+            PropertyList({Property("sequence", kPropertyTypeString, "{\"a\":[{\"s\":{\"ll\":90,\"rl\":90},\"v\":1000}]}")}),
+            [this](const PropertyList& properties) -> ReturnValue {
+                QueueServoSequence(properties["sequence"].value<std::string>().c_str());
+                return true;
+            });
+
+        // 停止并复位
+        mcp_server.AddTool("self.otto.stop", "立即停止所有动作并复位", PropertyList(),
+                           [this](const PropertyList& properties) -> ReturnValue {
+                               if (action_task_handle_ != nullptr) { vTaskDelete(action_task_handle_); action_task_handle_ = nullptr; }
+                               is_action_in_progress_ = false; PowerManager::ResumeBatteryUpdate(); xQueueReset(action_queue_);
+                               QueueAction(ACTION_HOME, 1, 1000, 1, 0); return true;
+                           });
+
+        // 优雅关机
+        mcp_server.AddTool("self.system.shutdown", "关闭机器人电源并进入深度睡眠", PropertyList(),
+                           [this](const PropertyList& properties) -> ReturnValue {
+                               ESP_LOGI(TAG, "收到关机指令，准备进入深度睡眠...");
+                               if (action_task_handle_ != nullptr) { vTaskDelete(action_task_handle_); action_task_handle_ = nullptr; }
+                               xQueueReset(action_queue_);
+                               otto_.Home(true); 
+                               auto backlight = Board::GetInstance().GetBacklight();
+                               if (backlight) backlight->SetBrightness(0);
+                               vTaskDelay(pdMS_TO_TICKS(1000));
+                               esp_deep_sleep_start();
+                               return true;
+                           });
+
+        // 闹钟工具
+        mcp_server.AddTool("self.alarm.set", "设置一个倒计时闹钟或提醒",
+            PropertyList({ Property("seconds", kPropertyTypeInteger, 10, 1, 86400) }),
+            [this](const PropertyList& properties) -> ReturnValue {
+                int seconds = properties["seconds"].value<int>();
+                TimerHandle_t alarm_timer = xTimerCreate(
+                    "MyAlarm", pdMS_TO_TICKS(seconds * 1000), pdFALSE, (void*)this,
+                    [](TimerHandle_t xTimer) {
+                        OttoController* controller = (OttoController*)pvTimerGetTimerID(xTimer);
+                        auto display = Board::GetInstance().GetDisplay();
+                        if (display) display->SetChatMessage("system", "叮叮叮！闹钟时间到了！");
+                        if (controller) {
+                            if (controller->has_hands_) controller->QueueAction(ACTION_HANDS_UP, 1, 500, 0, 0);
+                            else controller->QueueAction(ACTION_JUMP, 1, 500, 0, 0);
+                        }
+                        xTimerDelete(xTimer, 0); 
+                    }
+                );
+                if (alarm_timer != nullptr) {
+                    xTimerStart(alarm_timer, 0);
+                    return "闹钟已设置，将在 " + std::to_string(seconds) + " 秒后提醒您。";
+                } else return "错误：内存不足，闹钟设置失败。";
+            });
+
+        // 微调与状态
+        mcp_server.AddTool("self.otto.set_trim", "校准单个舵机位置。",
+            PropertyList({Property("servo_type", kPropertyTypeString, "left_leg"), Property("trim_value", kPropertyTypeInteger, 0, -50, 50)}),
+            [this](const PropertyList& properties) -> ReturnValue {
+                std::string servo_type = properties["servo_type"].value<std::string>();
+                int trim_value = properties["trim_value"].value<int>();
+                Settings settings("otto_trims", true);
+                int ll = settings.GetInt("left_leg", 0), rl = settings.GetInt("right_leg", 0);
+                int lf = settings.GetInt("left_foot", 0), rf = settings.GetInt("right_foot", 0);
+                int lh = settings.GetInt("left_hand", 0), rh = settings.GetInt("right_hand", 0);
+                if (servo_type == "left_leg") { ll = trim_value; settings.SetInt("left_leg", ll); }
+                else if (servo_type == "right_leg") { rl = trim_value; settings.SetInt("right_leg", rl); }
+                else if (servo_type == "left_foot") { lf = trim_value; settings.SetInt("left_foot", lf); }
+                else if (servo_type == "right_foot") { rf = trim_value; settings.SetInt("right_foot", rf); }
+                else if (servo_type == "left_hand") { if (!has_hands_) return "无手部"; lh = trim_value; settings.SetInt("left_hand", lh); }
+                else if (servo_type == "right_hand") { if (!has_hands_) return "无手部"; rh = trim_value; settings.SetInt("right_hand", rh); }
+                else return "错误：无效的舵机类型";
+                otto_.SetTrims(ll, rl, lf, rf, lh, rh);
+                QueueAction(ACTION_JUMP, 1, 500, 0, 0);
+                return "舵机微调保存成功";
+            });
+
+        mcp_server.AddTool("self.otto.get_trims", "获取当前的舵机微调设置", PropertyList(),
+                           [this](const PropertyList& properties) -> ReturnValue {
+                               Settings settings("otto_trims", false);
+                               return "{\"left_leg\":" + std::to_string(settings.GetInt("left_leg", 0)) +
+                                      ",\"right_leg\":" + std::to_string(settings.GetInt("right_leg", 0)) +
+                                      ",\"left_foot\":" + std::to_string(settings.GetInt("left_foot", 0)) +
+                                      ",\"right_foot\":" + std::to_string(settings.GetInt("right_foot", 0)) +
+                                      ",\"left_hand\":" + std::to_string(settings.GetInt("left_hand", 0)) +
+                                      ",\"right_hand\":" + std::to_string(settings.GetInt("right_hand", 0)) + "}";
+                           });
+
+        mcp_server.AddTool("self.otto.get_status", "获取机器人状态，返回 moving 或 idle", PropertyList(),
+                           [this](const PropertyList& properties) -> ReturnValue { return is_action_in_progress_ ? "moving" : "idle"; });
+
+        mcp_server.AddTool("self.battery.get_level", "获取机器人电池电量和充电状态", PropertyList(),
+                           [](const PropertyList& properties) -> ReturnValue {
+                               int level = 0; bool charging = false, discharging = false;
+                               Board::GetInstance().GetBatteryLevel(level, charging, discharging);
+                               return "{\"level\":" + std::to_string(level) + ",\"charging\":" + (charging ? "true" : "false") + "}";
+                           });
+
+        mcp_server.AddTool("self.otto.get_ip", "获取机器人WiFi IP地址", PropertyList(),
+                           [](const PropertyList& properties) -> ReturnValue {
+                               std::string ip = WifiManager::GetInstance().GetIpAddress();
+                               return ip.empty() ? "{\"ip\":\"\",\"connected\":false}" : "{\"ip\":\"" + ip + "\",\"connected\":true}";
+                           });
     }
 
     ~OttoController() {

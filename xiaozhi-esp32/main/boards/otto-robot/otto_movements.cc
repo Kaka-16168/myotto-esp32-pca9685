@@ -26,8 +26,8 @@ float EaseOutCubic(float t) {
     return 1.0f - inv * inv * inv;
 }
 
-// 单发一个舵机的 PWM (用于开机逐个归位)
-void SetSinglePcaPwm(uint8_t channel, int angle, int trim) {
+// 🌟 核心修复：严格按传入的通道号进行发送，避免批量发送导致的错位
+void SetPcaPwm(uint8_t channel, int angle, int trim) {
     if (pca9685_dev_handle == nullptr) return;
 
     int target_angle = angle + trim;
@@ -41,29 +41,6 @@ void SetSinglePcaPwm(uint8_t channel, int angle, int trim) {
     uint8_t data[5] = {reg, 0, 0, (uint8_t)(off_count & 0xFF), (uint8_t)(off_count >> 8)};
     
     i2c_master_transmit(pca9685_dev_handle, data, 5, 100);
-}
-
-// 批量发 6 个舵机的 PWM (用于执行动作)
-void SetAllPcaPwm(int angles[SERVO_COUNT], int trims[SERVO_COUNT]) {
-    if (pca9685_dev_handle == nullptr) return;
-
-    uint8_t data[25];
-    data[0] = PCA9685_LED0_ON_L; 
-
-    for (int i = 0; i < SERVO_COUNT; i++) {
-        int target_angle = angles[i] + trims[i];
-        if (target_angle < 0) target_angle = 0;
-        if (target_angle > 180) target_angle = 180;
-
-        float pulse_us = 500.0f + (target_angle / 180.0f) * 2000.0f;
-        uint16_t off_count = (uint16_t)((pulse_us / 20000.0f) * 4096.0f);
-
-        data[1 + i * 4] = 0; // ON_L
-        data[2 + i * 4] = 0; // ON_H
-        data[3 + i * 4] = (uint8_t)(off_count & 0xFF); // OFF_L
-        data[4 + i * 4] = (uint8_t)(off_count >> 8);   // OFF_H
-    }
-    i2c_master_transmit(pca9685_dev_handle, data, 25, 100);
 }
 }
 
@@ -99,16 +76,14 @@ void Otto::Init(int left_leg, int right_leg, int left_foot, int right_foot, int 
 void Otto::AttachServos() {
     int init_angles[SERVO_COUNT] = {90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
     
-    // 🌟 核心修复：逐个归位，每次间隔 300ms，防止电流过大导致 ESP32 重启
-    ESP_LOGI(TAG, "开始逐个归位舵机，防止电压骤降...");
+    ESP_LOGI(TAG, "开始逐个归位舵机...");
     for (int i = 0; i < SERVO_COUNT; i++) {
         if (servo_pins_[i] != -1) {
-            SetSinglePcaPwm(servo_pins_[i], init_angles[i], servo_trim_[i]);
+            SetPcaPwm((uint8_t)servo_pins_[i], init_angles[i], servo_trim_[i]);
             current_positions_[i] = init_angles[i];
-            vTaskDelay(pdMS_TO_TICKS(300)); 
+            vTaskDelay(pdMS_TO_TICKS(300)); // 逐个归位，防止电压骤降死机
         }
     }
-    ESP_LOGI(TAG, "所有舵机归位完成");
 }
 
 void Otto::DetachServos() {}
@@ -127,8 +102,12 @@ void Otto::SetTrims(int left_leg, int right_leg, int left_foot, int right_foot, 
 void Otto::MoveServos(int time, int servo_target[]) {
     if (GetRestState() == true) SetRestState(false);
     if (time <= 10) {
-        SetAllPcaPwm(servo_target, servo_trim_);
-        for (int i = 0; i < SERVO_COUNT; i++) current_positions_[i] = servo_target[i];
+        for (int i = 0; i < SERVO_COUNT; i++) {
+            if (servo_pins_[i] != -1) {
+                SetPcaPwm((uint8_t)servo_pins_[i], servo_target[i], servo_trim_[i]);
+                current_positions_[i] = servo_target[i];
+            }
+        }
         vTaskDelay(pdMS_TO_TICKS(time));
         return;
     }
@@ -140,13 +119,14 @@ void Otto::MoveServos(int time, int servo_target[]) {
     for (int step = 1; step <= steps; step++) {
         float t = static_cast<float>(step) / static_cast<float>(steps);
         float eased_t = EaseOutCubic(t);
-        int current_target[SERVO_COUNT];
         for (int i = 0; i < SERVO_COUNT; i++) {
-            float interpolated = start[i] + (servo_target[i] - start[i]) * eased_t;
-            current_target[i] = static_cast<int>(std::round(interpolated));
-            current_positions_[i] = current_target[i];
+            if (servo_pins_[i] != -1) {
+                float interpolated = start[i] + (servo_target[i] - start[i]) * eased_t;
+                int pos = static_cast<int>(std::round(interpolated));
+                SetPcaPwm((uint8_t)servo_pins_[i], pos, servo_trim_[i]);
+                current_positions_[i] = pos;
+            }
         }
-        SetAllPcaPwm(current_target, servo_trim_);
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
@@ -156,8 +136,8 @@ void Otto::MoveSingle(int position, int servo_number) {
     if (position < 0) position = 90;
     if (GetRestState() == true) SetRestState(false);
     if (servo_number >= 0 && servo_number < SERVO_COUNT && servo_pins_[servo_number] != -1) {
+        SetPcaPwm((uint8_t)servo_pins_[servo_number], position, servo_trim_[servo_number]);
         current_positions_[servo_number] = position;
-        SetAllPcaPwm(current_positions_, servo_trim_);
     }
 }
 
@@ -166,15 +146,15 @@ void Otto::OscillateServos(int amplitude[SERVO_COUNT], int offset[SERVO_COUNT], 
     double end_time = period * cycle + ref;
     while (millis() < end_time) {
         double t = (millis() - ref);
-        int current_target[SERVO_COUNT];
         for (int i = 0; i < SERVO_COUNT; i++) {
-            double angle = (offset[i] + 90) + amplitude[i] * sin((2 * M_PI / period) * t - phase_diff[i]);
-            if (angle < 0) angle = 0;
-            if (angle > 180) angle = 180;
-            current_target[i] = (int)angle;
-            current_positions_[i] = (int)angle;
+            if (servo_pins_[i] != -1) {
+                double angle = (offset[i] + 90) + amplitude[i] * sin((2 * M_PI / period) * t - phase_diff[i]);
+                if (angle < 0) angle = 0;
+                if (angle > 180) angle = 180;
+                SetPcaPwm((uint8_t)servo_pins_[i], (int)angle, servo_trim_[i]);
+                current_positions_[i] = (int)angle;
+            }
         }
-        SetAllPcaPwm(current_target, servo_trim_);
         vTaskDelay(pdMS_TO_TICKS(10)); 
     }
     vTaskDelay(pdMS_TO_TICKS(10));

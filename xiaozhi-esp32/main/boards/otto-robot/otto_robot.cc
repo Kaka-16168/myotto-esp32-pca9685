@@ -23,7 +23,8 @@
 #include "websocket_control_server.h"
 #include "wifi_board.h"
 
-#define TAG "OttoRobot"
+// 🌟 修复：添加 __attribute__((unused)) 
+static const char* TAG __attribute__((unused)) = "OttoRobot";
 
 extern void InitializeOttoController(const HardwareConfig& hw_config);
 

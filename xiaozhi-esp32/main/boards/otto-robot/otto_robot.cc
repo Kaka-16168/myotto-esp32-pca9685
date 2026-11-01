@@ -87,15 +87,9 @@ private:
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
             if (app.GetDeviceState() == kDeviceStateStarting) {
-                // 💡 在进入配网模式前，强制屏幕显示提示
-                if (display_) {
-                    display_->SetChatMessage("system", "等待配网中...");
-                }
-                // 调用基类的原生配网函数
                 EnterWifiConfigMode();
                 return;
             }
-            // 正常情况下按下按键触发对话
             app.ToggleChatState();
         });
     }

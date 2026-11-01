@@ -7,12 +7,13 @@
 #include "freertos/idf_additions.h"
 #include <driver/i2c_master.h>
 #include <esp_log.h>
+#include <esp_timer.h> // 🌟 加上这一行，修复 esp_timer_get_time 找不到的问题
 
 #ifndef DEG2RAD
 #define DEG2RAD(g) ((g) * M_PI / 180.0)
 #endif
 
-// 🌟 修复：添加 __attribute__((unused)) 防止 -Werror 编译报错
+// 防止 -Werror 编译报错
 static const char* TAG __attribute__((unused)) = "OttoMovements";
 
 #define HAND_HOME_POSITION 45

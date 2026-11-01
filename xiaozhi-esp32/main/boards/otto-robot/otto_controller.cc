@@ -196,18 +196,27 @@ private:
                         } else cJSON_Delete(json);
                     }
                 } else if (params.action_type == ACTION_ALARM_TRIGGERED) {
-                    ESP_LOGI(TAG, "闹钟触发！");
+                    // 🌟 修改点：闹钟触发逻辑
+                    ESP_LOGI(TAG, "闹钟触发！准备语音播报和单手招手");
+                    
+                    // 1. 触发系统 TTS 语音播报（大模型声音）
+                    // 这里使用小智框架通用的文本注入方式，底层会自动转为语音念出来
+                    auto& app = Application::GetInstance();
+                    app.SetChatMessage("system", "滴答滴答，闹钟时间到了，快起床吧！");
+                    
+                    // 2. 屏幕显示提醒
                     auto display = Board::GetInstance().GetDisplay();
-                    if (display) display->SetChatMessage("system", "叮叮叮！闹钟时间到了！");
-                    
-                    // 🌟 连续播放 3 次闹钟音效
-                    for (int i = 0; i < 3; i++) {
-                        Application::GetInstance().PlaySound("exclamation");
-                        vTaskDelay(pdMS_TO_TICKS(1000));
+                    if (display) display->SetChatMessage("assistant", "时间到了！");
+
+                    // 3. 执行“单手招手”动作（这里选左手 LEFT，持续招手 5 次）
+                    if (controller->has_hands_) {
+                        controller->otto_.HandWave(LEFT);
+                        vTaskDelay(pdMS_TO_TICKS(2000)); // 留出时间让语音播完
+                        controller->otto_.Home(true);
+                    } else {
+                        // 如果没有手部舵机，就做一个原地跳跃代替
+                        controller->otto_.Jump(1, 500);
                     }
-                    
-                    if (controller->has_hands_) controller->otto_.HandsUp(500, 0);
-                    else controller->otto_.Jump(1, 500);
                     
                 } else {
                     switch (params.action_type) {

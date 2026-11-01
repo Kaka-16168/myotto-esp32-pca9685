@@ -1,10 +1,9 @@
 name: Build Otto Robot Firmware
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch: 
 
 permissions:
   contents: read
@@ -12,48 +11,39 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      # 使用项目官方 CI 和文档推荐的稳定版本
-      image: espressif/idf:release-v6.1
+    container: espressif/idf:v6.0.1 # 使用 v6.0.1 完美适配新版 I2C 驱动
     
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Build Otto Firmware
-        shell: bash
+        
+      - name: Build Firmware
         run: |
-          source "$IDF_PATH/export.sh"
+          . $IDF_PATH/export.sh
+          cd xiaozhi-esp32 # 如果你是把内容直接放在了根目录，请把这行删掉
           
-          # ⚠️ 如果你的仓库根目录直接是 xiaozhi-esp32 的内容，请删除下面这行
-          cd xiaozhi-esp32
-          
-          # 1. 彻底清理旧的编译缓存
-          idf.py fullclean
           rm -f sdkconfig
           
-          # 2. 使用项目自带的 build.py 脚本进行编译，它会自动处理配置
-          #    我们只需要在这里覆盖必要的配置项
+          # 强制锁定 Otto 板型
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
+          echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
+          
+          # 内存防重启配置 (N16R8 必开 8MB PSRAM)
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
-          echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
+          
+          # 防止 SPI 花屏
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 开启官方默认唤醒词 (带 AFE 音频前端)
-          echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
+          # 编译并合并固件
+          idf.py set-target esp32s3
+          idf.py build
+          idf.py merge-bin
           
-          # 关闭 BluFi 与自定义唤醒词，减少不必要依赖和潜在的冲突
-          echo "CONFIG_USE_ESP_BLUFI_WIFI_PROVISIONING=n" >> sdkconfig.defaults
-          echo "CONFIG_USE_CUSTOM_WAKE_WORD=n" >> sdkconfig.defaults
-          
-          # 3. 调用官方脚本编译 Otto 板子
-          python scripts/build.py otto-robot
-
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: otto-esp32s3-firmware
-          path: xiaozhi-esp32/build/merged-binary.bin
+          path: xiaozhi-esp32/build/merged-binary.bin # 千万注意不要有中文句号
           if-no-files-found: error

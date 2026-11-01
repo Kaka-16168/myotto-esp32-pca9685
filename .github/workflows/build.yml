@@ -37,7 +37,7 @@ jobs:
           # 1. 指定板子为 Otto
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           
-          # 2. 开启内存与网络支持 (N16R8)
+          # 2. 开启内存与网络支持 (N16R8 必备)
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
@@ -46,15 +46,12 @@ jobs:
           # 3. 防止屏幕花屏 (SPI ISR 驻留 IRAM)
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 4. 🌟 开启“卡卡”唤醒词
-          echo "CONFIG_USE_CUSTOM_WAKE_WORD=y" >> sdkconfig.defaults
-          echo 'CONFIG_CUSTOM_WAKE_WORD="ka ka"' >> sdkconfig.defaults
-          echo 'CONFIG_CUSTOM_WAKE_WORD_DISPLAY="卡卡"' >> sdkconfig.defaults
-          echo "CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=15" >> sdkconfig.defaults
+          # 4. 🌟 开启官方默认唤醒词 (带 AFE 音频前端，支持回声消除)
+          echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           
-          # 5. 强制关闭音频处理器与 BluFi，防止 v6.1 版本下的 PSA 加密库依赖冲突
-          echo "CONFIG_USE_AUDIO_PROCESSOR=n" >> sdkconfig.defaults
+          # 5. 显式关闭 BluFi 与自定义唤醒词，避免引入多余的加密库导致编译冲突
           echo "CONFIG_USE_ESP_BLUFI_WIFI_PROVISIONING=n" >> sdkconfig.defaults
+          echo "CONFIG_USE_CUSTOM_WAKE_WORD=n" >> sdkconfig.defaults
           
           # 6. 开始编译
           idf.py set-target esp32s3
@@ -66,6 +63,6 @@ jobs:
         with:
           # 产物名称
           name: otto-esp32s3-firmware
-          # ⚠️ 确保这里路径正确（不要带中文句号）
+          # ⚠️ 确保路径正确（不要带中文句号）
           path: xiaozhi-esp32/build/merged-binary.bin
           if-no-files-found: error

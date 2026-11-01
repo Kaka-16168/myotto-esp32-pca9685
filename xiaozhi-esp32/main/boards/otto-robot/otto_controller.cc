@@ -25,7 +25,7 @@
 static const char* TAG __attribute__((unused)) = "OttoController";
 
 #define PCA9685_I2C_PORT    I2C_NUM_0
-#define PCA9685_I2C_FREQ    400000 // 🌟 提速到 400kHz
+#define PCA9685_I2C_FREQ    100000 // 100kHz 提升稳定性防错乱
 #define PCA9685_ADDR        0x40
 
 i2c_master_dev_handle_t pca9685_dev_handle = nullptr;
@@ -58,7 +58,8 @@ private:
         ACTION_HANDS_DOWN = 15, ACTION_HAND_WAVE = 16, ACTION_WINDMILL = 20,
         ACTION_TAKEOFF = 21, ACTION_FITNESS = 22, ACTION_GREETING = 23,
         ACTION_SHY = 24, ACTION_SHOWCASE = 28, ACTION_HOME = 17,
-        ACTION_SERVO_SEQUENCE = 18, ACTION_WHIRLWIND_LEG = 19
+        ACTION_SERVO_SEQUENCE = 18, ACTION_WHIRLWIND_LEG = 19,
+        ACTION_ALARM_TRIGGERED = 99 // 🌟 新增闹钟触发动作
     };
 
     void InitPca9685() {
@@ -84,10 +85,11 @@ private:
         uint8_t data[2];
         data[0] = 0x00; data[1] = 0x10; i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         data[0] = 0xFE; data[1] = 121;  i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
+        data[0] = 0x01; data[1] = 0x04; i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         data[0] = 0x00; data[1] = 0x20; i2c_master_transmit(pca9685_dev_handle, data, 2, -1);
         
         vTaskDelay(pdMS_TO_TICKS(10));
-        ESP_LOGI(TAG, "PCA9685 初始化成功 (400kHz)");
+        ESP_LOGI(TAG, "PCA9685 初始化成功 (100kHz, 推挽输出)");
     }
 
     static void ActionTask(void* arg) {
@@ -194,6 +196,22 @@ private:
                             cJSON_Delete(json);
                         } else cJSON_Delete(json);
                     }
+                } else if (params.action_type == ACTION_ALARM_TRIGGERED) {
+                    // 🌟 闹钟处理逻辑（在安全的任务上下文中执行）
+                    ESP_LOGI(TAG, "闹钟触发！");
+                    auto display = Board::GetInstance().GetDisplay();
+                    if (display) display->SetChatMessage("system", "叮叮叮！闹钟时间到了！");
+                    
+                    // 强行打开功放并播放 3 次提示音
+                    for (int i = 0; i < 3; i++) {
+                        Application::GetInstance().PlaySound("exclamation");
+                        vTaskDelay(pdMS_TO_TICKS(800));
+                    }
+                    
+                    // 配合动作
+                    if (controller->has_hands_) controller->otto_.HandsUp(500, 0);
+                    else controller->otto_.Jump(1, 500);
+                    
                 } else {
                     switch (params.action_type) {
                         case ACTION_WALK: controller->otto_.Walk(params.steps, params.speed, params.direction, params.amount); break;
@@ -234,13 +252,12 @@ private:
                 PowerManager::ResumeBatteryUpdate();
                 vTaskDelay(pdMS_TO_TICKS(20));
             }
-            vTaskDelay(pdMS_TO_TICKS(10)); // 🌟 防饿死
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
     }
 
     void StartActionTaskIfNeeded() {
         if (action_task_handle_ == nullptr) {
-            // 🌟 降低优先级，避免卡死 WiFi 导致无法配网
             xTaskCreate(ActionTask, "otto_action", 1024 * 4, this, 5, &action_task_handle_);
         }
     }
@@ -369,7 +386,7 @@ public:
                                return true;
                            });
 
-        // 🌟 闹钟修复：唤醒语音播报和舵机
+        // 🌟 修复后的闹钟逻辑：只入队，不在定时器里处理复杂音频
         mcp_server.AddTool("self.alarm.set", "设置一个倒计时闹钟或提醒",
             PropertyList({ Property("seconds", kPropertyTypeInteger, 10, 1, 86400) }),
             [this](const PropertyList& properties) -> ReturnValue {
@@ -378,19 +395,9 @@ public:
                     "MyAlarm", pdMS_TO_TICKS(seconds * 1000), pdFALSE, (void*)this,
                     [](TimerHandle_t xTimer) {
                         OttoController* controller = (OttoController*)pvTimerGetTimerID(xTimer);
-                        
-                        // 1. 调用小智的语音播报（需要确保系统处于空闲状态才会播报）
-                        Application::GetInstance().PlaySound("ding"); 
-                        vTaskDelay(pdMS_TO_TICKS(1000));
-                        
-                        // 2. 屏幕显示
-                        auto display = Board::GetInstance().GetDisplay();
-                        if (display) display->SetChatMessage("system", "叮叮叮！闹钟时间到了！");
-                        
-                        // 3. 机器人动作
+                        // 仅将闹钟作为任务丢入动作队列，由 ActionTask 去执行发声和安全动作
                         if (controller) {
-                            if (controller->has_hands_) controller->QueueAction(ACTION_HANDS_UP, 1, 500, 0, 0);
-                            else controller->QueueAction(ACTION_JUMP, 1, 500, 0, 0);
+                            controller->QueueAction(ACTION_ALARM_TRIGGERED, 0, 0, 0, 0);
                         }
                         xTimerDelete(xTimer, 0); 
                     }

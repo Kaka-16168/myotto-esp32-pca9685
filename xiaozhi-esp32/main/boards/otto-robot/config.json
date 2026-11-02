@@ -1,6 +1,7 @@
 {
     "type": "otto-robot",
     "target": "esp32s3",
+    "language": "zh-CN",
     "builds": [
         {
             "name": "otto-robot",

@@ -49,7 +49,6 @@ private:
         buscfg.quadwp_io_num = GPIO_NUM_NC;
         buscfg.quadhd_io_num = GPIO_NUM_NC;
         buscfg.max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(uint16_t);
-        // 降低 DMA 通道优先级，防止与 I2C 冲突
         ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
     }
 
@@ -60,10 +59,7 @@ private:
         io_config.cs_gpio_num = hw_config_.display_cs_pin;
         io_config.dc_gpio_num = hw_config_.display_dc_pin;
         io_config.spi_mode = DISPLAY_SPI_MODE;
-        
-        // 🌟 核心修复：大幅降低 SPI 频率，从 40MHz 降到 20MHz，彻底解决花屏
-        io_config.pclk_hz = 20 * 1000 * 1000; 
-        
+        io_config.pclk_hz = 20 * 1000 * 1000; // 🌟 降到 20MHz 防花屏
         io_config.trans_queue_depth = 10;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
@@ -140,7 +136,6 @@ public:
         hw_config_ = NON_CAMERA_VERSION_CONFIG;
         ESP_LOGI(TAG, "强制使用无摄像头版本配置");
 
-        // 增加延时，确保电源稳定后再开启大电流外设
         vTaskDelay(pdMS_TO_TICKS(100));
         InitializeSpi();
         vTaskDelay(pdMS_TO_TICKS(100));

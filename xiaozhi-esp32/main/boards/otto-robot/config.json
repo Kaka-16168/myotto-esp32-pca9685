@@ -5,6 +5,7 @@
         {
             "name": "otto-robot",
             "sdkconfig_append": [
+                "CONFIG_LANGUAGE_ZH_CN=y",
                 "CONFIG_HTTPD_WS_SUPPORT=y",
                 "CONFIG_SPIRAM=y",
                 "CONFIG_SPIRAM_MODE_OCT=y",

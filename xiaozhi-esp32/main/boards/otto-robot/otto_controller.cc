@@ -102,6 +102,7 @@ private:
                 controller->is_action_in_progress_ = true;
                 
                 if (params.action_type == ACTION_SERVO_SEQUENCE) {
+                    // ... 序列代码保持不变 ...
                     cJSON* json = cJSON_Parse(params.servo_sequence_json);
                     if (json != nullptr) {
                         cJSON* actions = cJSON_GetObjectItem(json, "a");
@@ -197,7 +198,6 @@ private:
                     }
                 } else if (params.action_type == ACTION_ALARM_TRIGGERED) {
                     ESP_LOGI(TAG, "闹钟触发！");
-                    
                     auto& app = Application::GetInstance();
                     app.PlaySound("exclamation");
                     vTaskDelay(pdMS_TO_TICKS(500));
@@ -318,7 +318,6 @@ public:
     void RegisterMcpTools() {
         auto& mcp_server = McpServer::GetInstance();
         
-        // 补全了所有的动作描述
         mcp_server.AddTool("self.otto.action", 
                            "执行机器人动作。支持的动作有：walk(行走), turn(转身), jump(跳跃), swing(摇摆), "
                            "moonwalk(太空步), bend(弯曲), shake_leg(摇腿), updown(上下运动), whirlwind_leg(旋风腿), "
@@ -374,7 +373,6 @@ public:
                                return true;
                            });
 
-        // 其他工具保持不变
         mcp_server.AddTool("self.otto.servo_sequences", "AI自定义动作编程（即兴动作）。",
             PropertyList({Property("sequence", kPropertyTypeString, "{\"a\":[{\"s\":{\"ll\":90,\"rl\":90},\"v\":1000}]}")}),
             [this](const PropertyList& properties) -> ReturnValue {
@@ -389,14 +387,22 @@ public:
                                QueueAction(ACTION_HOME, 1, 1000, 1, 0); return true;
                            });
 
+        // 🌟 修复关机逻辑：加入唤醒源配置
         mcp_server.AddTool("self.system.shutdown", "关闭机器人电源并进入深度睡眠", PropertyList(),
                            [this](const PropertyList& properties) -> ReturnValue {
+                               ESP_LOGI(TAG, "收到关机指令，准备进入深度睡眠...");
                                if (action_task_handle_ != nullptr) { vTaskDelete(action_task_handle_); action_task_handle_ = nullptr; }
                                xQueueReset(action_queue_);
+                               
                                otto_.Home(true); 
                                auto backlight = Board::GetInstance().GetBacklight();
                                if (backlight) backlight->SetBrightness(0);
+                               
                                vTaskDelay(pdMS_TO_TICKS(1000));
+                               
+                               // 🌟 必须设置唤醒源，否则 ESP32 会立即重启（黑屏又亮）
+                               // 我们配置 BOOT 键（GPIO0）为低电平唤醒
+                               esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_GPIO, 0);
                                esp_deep_sleep_start();
                                return true;
                            });

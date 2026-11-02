@@ -197,23 +197,20 @@ private:
                     }
                 } else if (params.action_type == ACTION_ALARM_TRIGGERED) {
                     ESP_LOGI(TAG, "闹钟触发！");
-                    
-                    // 1. 强力唤醒功放，播放两次提示音（确保硬件通电发声）
                     auto& app = Application::GetInstance();
+                    
+                    // 强制唤醒喇叭并播放提示音
                     app.PlaySound("exclamation");
                     vTaskDelay(pdMS_TO_TICKS(500));
                     app.PlaySound("exclamation");
                     vTaskDelay(pdMS_TO_TICKS(500));
                     
-                    // 2. 注入语音播报（大模型TTS），屏幕同时显示
+                    // 屏幕与语音播报
                     app.Alert("主人 时间到了", "neutral", "exclamation");
-                    
                     auto display = Board::GetInstance().GetDisplay();
-                    if (display) {
-                        display->SetChatMessage("assistant", "主人 时间到了");
-                    }
+                    if (display) display->SetChatMessage("assistant", "主人 时间到了");
 
-                    // 3. 动作反馈：单手招手
+                    // 单手招手
                     if (controller->has_hands_) {
                         controller->otto_.HandWave(LEFT); 
                         vTaskDelay(pdMS_TO_TICKS(2000)); 
@@ -235,12 +232,15 @@ private:
                         case ACTION_RADIO_CALISTHENICS: if (controller->has_hands_) controller->otto_.RadioCalisthenics(); break;
                         case ACTION_MAGIC_CIRCLE: if (controller->has_hands_) controller->otto_.MagicCircle(); break;
                         case ACTION_SHOWCASE: controller->otto_.Showcase(); break;
+                        
+                        // 🌟 补齐缺失的动作
                         case ACTION_UPDOWN: controller->otto_.UpDown(params.steps, params.speed, params.amount); break;
                         case ACTION_TIPTOE_SWING: controller->otto_.TiptoeSwing(params.steps, params.speed, params.amount); break;
                         case ACTION_JITTER: controller->otto_.Jitter(params.steps, params.speed, params.amount); break;
                         case ACTION_ASCENDING_TURN: controller->otto_.AscendingTurn(params.steps, params.speed, params.amount); break;
                         case ACTION_CRUSAITO: controller->otto_.Crusaito(params.steps, params.speed, params.amount, params.direction); break;
                         case ACTION_FLAPPING: controller->otto_.Flapping(params.steps, params.speed, params.amount, params.direction); break;
+                        
                         case ACTION_WHIRLWIND_LEG: controller->otto_.WhirlwindLeg(params.steps, params.speed, params.amount); break;
                         case ACTION_HANDS_UP: if (controller->has_hands_) controller->otto_.HandsUp(params.speed, params.direction); break;
                         case ACTION_HANDS_DOWN: if (controller->has_hands_) controller->otto_.HandsDown(params.speed, params.direction); break;
@@ -327,7 +327,12 @@ public:
     void RegisterMcpTools() {
         auto& mcp_server = McpServer::GetInstance();
         
-        mcp_server.AddTool("self.otto.action", "执行机器人动作...",
+        mcp_server.AddTool("self.otto.action", 
+                           "执行机器人动作。action: 动作名称；根据动作类型提供相应参数：direction: 方向，1=前进/左转，-1=后退/右转；0=左右同时；"
+                           "steps: 动作步数；speed: 动作速度(100-3000)；amount: 动作幅度(0-170)；arm_swing: 手臂摆动幅度(0-170)；"
+                           "基础动作：walk, turn, jump, swing, moonwalk, bend, shake_leg, updown, whirlwind_leg, sit, showcase, home；"
+                           "特殊步态：tiptoe_swing(踮脚摇摆), jitter(抖动), ascending_turn(跳跃转身), crusaito(侧滑步), flapping(扑腾)；"
+                           "手部动作：hands_up, hands_down, hand_wave, windmill, takeoff, fitness, greeting, shy, radio_calisthenics, magic_circle",
                            PropertyList({
                                Property("action", kPropertyTypeString, "sit"),
                                Property("steps", kPropertyTypeInteger, 3, 1, 100),
@@ -344,6 +349,7 @@ public:
                                int amount = properties["amount"].value<int>();
                                int arm_swing = properties["arm_swing"].value<int>();
 
+                               // 基础移动
                                if (action == "walk") QueueAction(ACTION_WALK, steps, speed, direction, arm_swing);
                                else if (action == "turn") QueueAction(ACTION_TURN, steps, speed, direction, arm_swing);
                                else if (action == "jump") QueueAction(ACTION_JUMP, steps, speed, 0, 0);
@@ -353,9 +359,20 @@ public:
                                else if (action == "shake_leg") QueueAction(ACTION_SHAKE_LEG, steps, speed, direction, 0);
                                else if (action == "updown") QueueAction(ACTION_UPDOWN, steps, speed, 0, amount);
                                else if (action == "whirlwind_leg") QueueAction(ACTION_WHIRLWIND_LEG, steps, speed, 0, amount);
+                               
+                               // 🌟 补齐的特殊步态
+                               else if (action == "tiptoe_swing") QueueAction(ACTION_TIPTOE_SWING, steps, speed, 0, amount);
+                               else if (action == "jitter") QueueAction(ACTION_JITTER, steps, speed, 0, amount);
+                               else if (action == "ascending_turn") QueueAction(ACTION_ASCENDING_TURN, steps, speed, 0, amount);
+                               else if (action == "crusaito") QueueAction(ACTION_CRUSAITO, steps, speed, direction, amount);
+                               else if (action == "flapping") QueueAction(ACTION_FLAPPING, steps, speed, direction, amount);
+                               
+                               // 固定动作
                                else if (action == "sit") QueueAction(ACTION_SIT, 1, 0, 0, 0);
                                else if (action == "showcase") QueueAction(ACTION_SHOWCASE, 1, 0, 0, 0);
                                else if (action == "home") QueueAction(ACTION_HOME, 1, 1000, 1, 0);
+                               
+                               // 手部动作
                                else if (action == "hands_up") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_HANDS_UP, 1, speed, direction, 0); }
                                else if (action == "hands_down") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_HANDS_DOWN, 1, speed, direction, 0); }
                                else if (action == "hand_wave") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_HAND_WAVE, 1, 0, 0, direction); }
@@ -366,6 +383,7 @@ public:
                                else if (action == "shy") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_SHY, steps, 0, direction, 0); }
                                else if (action == "radio_calisthenics") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_RADIO_CALISTHENICS, 1, 0, 0, 0); }
                                else if (action == "magic_circle") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_MAGIC_CIRCLE, 1, 0, 0, 0); }
+                               
                                else return "错误：无效的动作名称。";
                                return true;
                            });

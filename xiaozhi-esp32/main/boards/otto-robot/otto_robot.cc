@@ -9,10 +9,6 @@
 
 #include <new>
 
-// 🌟 引入底层寄存器用于关闭欠压检测
-#include "soc/soc.h"
-#include "soc/rtc_cntl_reg.h"
-
 #include "application.h"
 #include "button.h"
 #include "codecs/no_audio_codec.h"
@@ -63,7 +59,10 @@ private:
         io_config.cs_gpio_num = hw_config_.display_cs_pin;
         io_config.dc_gpio_num = hw_config_.display_dc_pin;
         io_config.spi_mode = DISPLAY_SPI_MODE;
-        io_config.pclk_hz = 20 * 1000 * 1000; // 降频防花屏
+        
+        // 降低 SPI 频率，防止花屏
+        io_config.pclk_hz = 20 * 1000 * 1000; 
+        
         io_config.trans_queue_depth = 10;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
@@ -137,10 +136,7 @@ public:
         : boot_button_(BOOT_BUTTON_GPIO),
           audio_codec_(nullptr) {
         
-        // 🌟 核心修复：关闭欠压检测，防止瞬态电流导致死机
-        WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-        ESP_LOGI(TAG, "已关闭硬件欠压检测 (Brownout Detector)");
-
+        // 强制无摄像头配置，彻底释放 PSRAM 给唤醒词使用
         hw_config_ = NON_CAMERA_VERSION_CONFIG;
         ESP_LOGI(TAG, "强制使用无摄像头版本配置");
 

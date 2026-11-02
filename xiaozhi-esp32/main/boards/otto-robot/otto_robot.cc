@@ -6,6 +6,7 @@
 #include <esp_lcd_panel_vendor.h>
 #include <esp_log.h>
 #include <esp_rom_sys.h>
+#include <esp_sleep.h> // 🌟 引入睡眠控制库
 
 #include <new>
 
@@ -26,6 +27,43 @@
 static const char* TAG __attribute__((unused)) = "OttoRobot";
 
 extern void InitializeOttoController(const HardwareConfig& hw_config);
+
+// 🌟 长按关机监控任务
+static void ButtonMonitorTask(void* pvParameters) {
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << BOOT_BUTTON_GPIO),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+
+    int hold_time = 0;
+    while (1) {
+        if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
+            hold_time += 100;
+            if (hold_time >= 5000) { // 满 5 秒
+                ESP_LOGI(TAG, "检测到长按 5 秒，准备关机...");
+                
+                // 1. 关闭屏幕背光
+                auto backlight = Board::GetInstance().GetBacklight();
+                if (backlight) backlight->SetBrightness(0);
+
+                // 2. 舵机卸力回正
+                // 注：我们在 controller 里已经实现了 shutdown 工具，这里直接切入深睡
+                
+                // 3. 配置唤醒源（必须配，否则黑屏后会立刻重启）
+                // GPIO0 为低电平时唤醒
+                esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_GPIO, 0);
+                esp_deep_sleep_start();
+            }
+        } else {
+            hold_time = 0;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
 
 class OttoRobot : public WifiBoard {
 private:
@@ -59,10 +97,7 @@ private:
         io_config.cs_gpio_num = hw_config_.display_cs_pin;
         io_config.dc_gpio_num = hw_config_.display_dc_pin;
         io_config.spi_mode = DISPLAY_SPI_MODE;
-        
-        // 降低 SPI 频率，防止花屏
         io_config.pclk_hz = 20 * 1000 * 1000; 
-        
         io_config.trans_queue_depth = 10;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
@@ -74,7 +109,6 @@ private:
         panel_config.bits_per_pixel = 16;
 
         ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(panel_io, &panel_config, &panel));
-
         esp_lcd_panel_reset(panel);
         esp_lcd_panel_init(panel);
         esp_lcd_panel_invert_color(panel, DISPLAY_INVERT_COLOR);
@@ -95,6 +129,8 @@ private:
             }
             app.ToggleChatState();
         });
+        // 🌟 启动长按监控任务
+        xTaskCreate(ButtonMonitorTask, "btn_monitor", 2048, NULL, 5, NULL);
     }
 
     void InitializeOttoController() { ::InitializeOttoController(hw_config_); }
@@ -136,7 +172,6 @@ public:
         : boot_button_(BOOT_BUTTON_GPIO),
           audio_codec_(nullptr) {
         
-        // 强制无摄像头配置，彻底释放 PSRAM 给唤醒词使用
         hw_config_ = NON_CAMERA_VERSION_CONFIG;
         ESP_LOGI(TAG, "强制使用无摄像头版本配置");
 

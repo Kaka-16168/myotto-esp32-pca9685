@@ -196,12 +196,24 @@ private:
                         } else cJSON_Delete(json);
                     }
                 } else if (params.action_type == ACTION_ALARM_TRIGGERED) {
-                    ESP_LOGI(TAG, "闹钟触发！准备语音播报和单手招手");
+                    ESP_LOGI(TAG, "闹钟触发！");
                     
-                    // 使用 Alert 接口，自带音效并触发大模型语音播报
+                    // 1. 强力唤醒功放，播放两次提示音（确保硬件通电发声）
                     auto& app = Application::GetInstance();
-                    app.Alert("主人，时间到了！", "neutral", "exclamation");
+                    app.PlaySound("exclamation");
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                    app.PlaySound("exclamation");
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                    
+                    // 2. 注入语音播报（大模型TTS），屏幕同时显示
+                    app.Alert("主人 时间到了", "neutral", "exclamation");
+                    
+                    auto display = Board::GetInstance().GetDisplay();
+                    if (display) {
+                        display->SetChatMessage("assistant", "主人 时间到了");
+                    }
 
+                    // 3. 动作反馈：单手招手
                     if (controller->has_hands_) {
                         controller->otto_.HandWave(LEFT); 
                         vTaskDelay(pdMS_TO_TICKS(2000)); 
@@ -256,7 +268,6 @@ private:
 
     void StartActionTaskIfNeeded() {
         if (action_task_handle_ == nullptr) {
-            // 🌟 堆栈加大到 8KB，防止复杂的动作解析导致栈溢出重启
             xTaskCreate(ActionTask, "otto_action", 1024 * 8, this, 5, &action_task_handle_);
         }
     }

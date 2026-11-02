@@ -33,11 +33,11 @@ jobs:
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           
-          # 3. 防止花屏配置
+          # 3. 防止屏幕花屏配置
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
           # ==========================================
-          # 🌟 4. 强制恢复官方原版唤醒词 ("你好小智")
+          # 🌟 4. 强制开启语音唤醒引擎与“你好小智”模型
           # ==========================================
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults

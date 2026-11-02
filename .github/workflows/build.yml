@@ -31,12 +31,11 @@ jobs:
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 🌟 核心修复：不要直接用 idf.py build！
-          # 使用小智官方的 python 脚本编译，它会自动把唤醒词模型打包到 assets 分区！
-          # 假设你的板子名字在 config.json 里叫 otto-robot
-          python scripts/build.py otto-robot
+          # 🌟 核心修复：传入 --language zh-CN 彻底解决语言报错
+          # 官方脚本会自动把唤醒词模型打包到 assets 分区
+          python scripts/build.py otto-robot --language zh-CN
           
-          # 编译完成后合并固件
+          # 合并固件
           cd build
           esptool.py --chip esp32s3 merge_bin -o merged-binary.bin @flash_args
           

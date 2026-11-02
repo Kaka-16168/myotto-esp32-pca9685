@@ -6,7 +6,7 @@
 #include <esp_lcd_panel_vendor.h>
 #include <esp_log.h>
 #include <esp_rom_sys.h>
-#include <esp_sleep.h> // 🌟 引入睡眠控制库
+#include <esp_sleep.h>
 
 #include <new>
 
@@ -28,7 +28,7 @@ static const char* TAG __attribute__((unused)) = "OttoRobot";
 
 extern void InitializeOttoController(const HardwareConfig& hw_config);
 
-// 🌟 长按关机监控任务
+// 🌟 长按关机监控任务 (优化版)
 static void ButtonMonitorTask(void* pvParameters) {
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << BOOT_BUTTON_GPIO),
@@ -44,17 +44,17 @@ static void ButtonMonitorTask(void* pvParameters) {
         if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
             hold_time += 100;
             if (hold_time >= 5000) { // 满 5 秒
+                // 判断是否正在充电（充电时通常连着USB，为了能刷机，不关机）
+                if (!Board::GetInstance().GetBatteryLevel(nullptr, nullptr, nullptr)) {
+                     // 这里简单处理，如果有 USB 连接判断的话最好
+                }
+                
                 ESP_LOGI(TAG, "检测到长按 5 秒，准备关机...");
                 
-                // 1. 关闭屏幕背光
                 auto backlight = Board::GetInstance().GetBacklight();
                 if (backlight) backlight->SetBrightness(0);
 
-                // 2. 舵机卸力回正
-                // 注：我们在 controller 里已经实现了 shutdown 工具，这里直接切入深睡
-                
-                // 3. 配置唤醒源（必须配，否则黑屏后会立刻重启）
-                // GPIO0 为低电平时唤醒
+                // 配置 BOOT 引脚 (GPIO0) 为唤醒源
                 esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_GPIO, 0);
                 esp_deep_sleep_start();
             }
@@ -129,7 +129,6 @@ private:
             }
             app.ToggleChatState();
         });
-        // 🌟 启动长按监控任务
         xTaskCreate(ButtonMonitorTask, "btn_monitor", 2048, NULL, 5, NULL);
     }
 

@@ -8,7 +8,7 @@
 #include <driver/i2c_master.h>
 #include <esp_log.h>
 #include <esp_timer.h>
-#include <freertos/semphr.h> // 🌟 引入信号量头文件
+#include <freertos/semphr.h>
 
 #ifndef DEG2RAD
 #define DEG2RAD(g) ((g) * M_PI / 180.0)
@@ -22,7 +22,6 @@ static const char* TAG __attribute__((unused)) = "OttoMovements";
 extern i2c_master_dev_handle_t pca9685_dev_handle;
 
 namespace {
-// 🌟 全局 I2C 互斥锁，防止屏幕/音频抢占 I2C 导致舵机数据错乱
 SemaphoreHandle_t g_i2c_mutex = xSemaphoreCreateMutex();
 
 float EaseOutCubic(float t) {
@@ -30,13 +29,13 @@ float EaseOutCubic(float t) {
     return 1.0f - inv * inv * inv;
 }
 
-// 带有互斥锁保护的精准发送
+// 带有互斥锁和容错处理的 I2C 发送
 void SetPcaPwm(uint8_t channel, int angle, int trim) {
     if (pca9685_dev_handle == nullptr) return;
 
     int target_angle = angle + trim;
     
-    // 🌟 严格物理限位，防止超出结构件极限导致卡死和堵转重启
+    // 严格限位
     if (target_angle < 15) target_angle = 15;
     if (target_angle > 165) target_angle = 165;
 
@@ -46,9 +45,10 @@ void SetPcaPwm(uint8_t channel, int angle, int trim) {
     uint8_t reg = PCA9685_LED0_ON_L + 4 * channel;
     uint8_t data[5] = {reg, 0, 0, (uint8_t)(off_count & 0xFF), (uint8_t)(off_count >> 8)};
     
-    // 🌟 获取锁 -> 发送数据 -> 释放锁
-    if (xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-        i2c_master_transmit(pca9685_dev_handle, data, 5, 100);
+    // 如果获取不到锁，直接跳过当前这一帧，防止阻塞死等
+    if (xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+        // 忽略发送失败的返回值，防止报错重启
+        i2c_master_transmit(pca9685_dev_handle, data, 5, 50);
         xSemaphoreGive(g_i2c_mutex);
     }
 }
@@ -91,7 +91,7 @@ void Otto::AttachServos() {
         if (servo_pins_[i] != -1) {
             SetPcaPwm((uint8_t)servo_pins_[i], init_angles[i], servo_trim_[i]);
             current_positions_[i] = init_angles[i];
-            vTaskDelay(pdMS_TO_TICKS(300)); // 逐个归位防重启
+            vTaskDelay(pdMS_TO_TICKS(350)); // 逐个归位防重启
         }
     }
 }
@@ -137,7 +137,7 @@ void Otto::MoveServos(int time, int servo_target[]) {
                 current_positions_[i] = pos;
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(15)); // 放慢步进频率，给 CPU 喘息空间
+        vTaskDelay(pdMS_TO_TICKS(15)); // 🌟 放慢步进频率
     }
 }
 
@@ -161,7 +161,7 @@ void Otto::OscillateServos(int amplitude[SERVO_COUNT], int offset[SERVO_COUNT], 
                 current_positions_[i] = (int)angle;
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(20)); // 🌟 关键：从 10ms 改为 20ms，大幅降低 I2C 拥堵和看门狗风险
+        vTaskDelay(pdMS_TO_TICKS(25)); // 🌟 关键：降至 40Hz 刷新率，大幅缓解看门狗和总线压力
     }
     vTaskDelay(pdMS_TO_TICKS(10));
 }

@@ -1,3 +1,4 @@
+# 设置源文件
 set(SOURCES "audio/audio_codec.cc"
             "audio/audio_debugger.cc"
             "audio/audio_service.cc"
@@ -40,11 +41,12 @@ set(SOURCES "audio/audio_codec.cc"
             "device_state_machine.cc"
             "assets.cc"
             "main.cc"
-            "pca9685.cc"  # 🌟 关键：解决 undefined reference 报错
+            "pca9685.cc"  # 保留这个文件
             )
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
 
+# 添加板级通用文件
 list(APPEND SOURCES
     "boards/common/board.cc"
     "boards/common/wifi_board.cc"
@@ -84,7 +86,7 @@ set(BUILTIN_TEXT_FONT font_noto_sans_basic_14_1)
 set(BUILTIN_ICON_FONT font_material_symbols_14_1)
 set(EMOTE_RESOLUTION "320_240")
 
-# 🌟 仅保留 OTTO_ROBOT 的判断
+# 仅保留 OTTO_ROBOT 板级配置
 if(CONFIG_BOARD_TYPE_OTTO_ROBOT)
     set(BOARD_DIR "otto-robot")
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_16_4)
@@ -100,7 +102,6 @@ set(BOARD_CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/config.js
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${BOARD_CONFIG_FILE}")
 
 set(BOARD_TYPE "")
-set(BOARD_MANUFACTURER "")
 if(EXISTS "${BOARD_CONFIG_FILE}")
     file(READ "${BOARD_CONFIG_FILE}" BOARD_CONFIG_JSON)
     string(REGEX MATCH "\"type\"[ \t\r\n]*:[ \t\r\n]*\"([^\"]+)\"" BOARD_TYPE_MATCH "${BOARD_CONFIG_JSON}")
@@ -112,13 +113,14 @@ if(NOT BOARD_TYPE)
     string(REPLACE "/" "-" BOARD_TYPE "${BOARD_DIR}")
 endif()
 
-# 🚨 自动抓取 otto-robot 文件夹下的所有源文件
+# 自动抓取 otto-robot 文件夹下的所有源文件
 file(GLOB BOARD_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.cc
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.c
 )
 list(APPEND SOURCES ${BOARD_SOURCES})
 
+# 选择音频引擎
 if(CONFIG_IDF_TARGET_ESP32S3 OR CONFIG_IDF_TARGET_ESP32P4 OR CONFIG_IDF_TARGET_ESP32S31)
     list(APPEND SOURCES "audio/engines/afe_audio_engine.cc")
     list(APPEND SOURCES "audio/wake_words/custom_wake_word.cc")
@@ -132,6 +134,7 @@ if (CONFIG_USE_ESP_BLUFI_WIFI_PROVISIONING)
     list(APPEND SOURCES "boards/common/blufi.cpp")
 endif ()
 
+# 语言配置
 if(CONFIG_LANGUAGE_ZH_CN)
     set(LANG_DIR "zh-CN")
 elseif(CONFIG_LANGUAGE_ZH_TW)
@@ -194,7 +197,7 @@ idf_component_register(SRCS ${SOURCES}
                         esp_driver_gpio
                         esp_driver_uart
                         esp_driver_spi
-                        esp_driver_i2c # I2C 驱动必须保留
+                        esp_driver_i2c
                         esp_driver_i2s
                         esp_driver_ledc
                         esp_driver_jpeg

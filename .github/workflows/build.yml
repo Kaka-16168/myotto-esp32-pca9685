@@ -20,18 +20,12 @@ jobs:
       - name: Build Firmware
         run: |
           . $IDF_PATH/export.sh
-          cd xiaozhi-esp32
+          cd xiaozhi-esp32  # 如果内容在根目录，请删除此行
           
           # 彻底清理可能残留的旧配置
           rm -rf build sdkconfig sdkconfig.old
           
-          # 在 build.py 运行前注入基础硬件配置
-          echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
-          echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
-          echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
-          echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
-          
-          # 调用官方脚本，唤醒词由 config.json 中的 wake_word 字段自动处理
+          # 直接调用官方脚本，语言和唤醒词由 config.json 和 --language 参数控制
           python scripts/build.py otto-robot --language zh-CN
           
           # 合并固件

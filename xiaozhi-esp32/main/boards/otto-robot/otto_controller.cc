@@ -197,13 +197,23 @@ private:
                     }
                 } else if (params.action_type == ACTION_ALARM_TRIGGERED) {
                     ESP_LOGI(TAG, "闹钟触发！");
+                    
+                    // 1. 强力唤醒功放，播放两次提示音（确保硬件通电发声）
                     auto& app = Application::GetInstance();
                     app.PlaySound("exclamation");
                     vTaskDelay(pdMS_TO_TICKS(500));
                     app.PlaySound("exclamation");
                     vTaskDelay(pdMS_TO_TICKS(500));
+                    
+                    // 2. 注入语音播报（大模型TTS），屏幕同时显示
                     app.Alert("主人 时间到了", "neutral", "exclamation");
                     
+                    auto display = Board::GetInstance().GetDisplay();
+                    if (display) {
+                        display->SetChatMessage("assistant", "主人 时间到了");
+                    }
+
+                    // 3. 动作反馈：单手招手
                     if (controller->has_hands_) {
                         controller->otto_.HandWave(LEFT); 
                         vTaskDelay(pdMS_TO_TICKS(2000)); 
@@ -317,8 +327,7 @@ public:
     void RegisterMcpTools() {
         auto& mcp_server = McpServer::GetInstance();
         
-        mcp_server.AddTool("self.otto.action", 
-                           "执行机器人动作。支持的动作有：walk, turn, jump, swing, moonwalk, bend, shake_leg, updown, whirlwind_leg, sit, showcase, home, hands_up, hands_down, hand_wave, windmill, takeoff, fitness, greeting, shy, radio_calisthenics, magic_circle, tiptoe_swing, jitter, ascending_turn, crusaito, flapping。",
+        mcp_server.AddTool("self.otto.action", "执行机器人动作...",
                            PropertyList({
                                Property("action", kPropertyTypeString, "sit"),
                                Property("steps", kPropertyTypeInteger, 3, 1, 100),
@@ -357,11 +366,6 @@ public:
                                else if (action == "shy") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_SHY, steps, 0, direction, 0); }
                                else if (action == "radio_calisthenics") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_RADIO_CALISTHENICS, 1, 0, 0, 0); }
                                else if (action == "magic_circle") { if (!has_hands_) return "缺少手部舵机"; QueueAction(ACTION_MAGIC_CIRCLE, 1, 0, 0, 0); }
-                               else if (action == "tiptoe_swing") QueueAction(ACTION_TIPTOE_SWING, steps, speed, 0, amount);
-                               else if (action == "jitter") QueueAction(ACTION_JITTER, steps, speed, 0, amount);
-                               else if (action == "ascending_turn") QueueAction(ACTION_ASCENDING_TURN, steps, speed, 0, amount);
-                               else if (action == "crusaito") QueueAction(ACTION_CRUSAITO, steps, speed, direction, amount);
-                               else if (action == "flapping") QueueAction(ACTION_FLAPPING, steps, speed, direction, amount);
                                else return "错误：无效的动作名称。";
                                return true;
                            });
@@ -382,14 +386,12 @@ public:
 
         mcp_server.AddTool("self.system.shutdown", "关闭机器人电源并进入深度睡眠", PropertyList(),
                            [this](const PropertyList& properties) -> ReturnValue {
-                               ESP_LOGI(TAG, "收到关机指令，准备进入深度睡眠...");
                                if (action_task_handle_ != nullptr) { vTaskDelete(action_task_handle_); action_task_handle_ = nullptr; }
                                xQueueReset(action_queue_);
                                otto_.Home(true); 
                                auto backlight = Board::GetInstance().GetBacklight();
                                if (backlight) backlight->SetBrightness(0);
                                vTaskDelay(pdMS_TO_TICKS(1000));
-                               esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_GPIO, 0);
                                esp_deep_sleep_start();
                                return true;
                            });

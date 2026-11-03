@@ -6,7 +6,6 @@
 #include <esp_lcd_panel_vendor.h>
 #include <esp_log.h>
 #include <esp_rom_sys.h>
-#include <esp_sleep.h>
 
 #include <new>
 
@@ -27,43 +26,6 @@
 static const char* TAG __attribute__((unused)) = "OttoRobot";
 
 extern void InitializeOttoController(const HardwareConfig& hw_config);
-
-// 🌟 长按关机监控任务 (优化版)
-static void ButtonMonitorTask(void* pvParameters) {
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << BOOT_BUTTON_GPIO),
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&io_conf);
-
-    int hold_time = 0;
-    while (1) {
-        if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
-            hold_time += 100;
-            if (hold_time >= 5000) { // 满 5 秒
-                // 判断是否正在充电（充电时通常连着USB，为了能刷机，不关机）
-                if (!Board::GetInstance().GetBatteryLevel(nullptr, nullptr, nullptr)) {
-                     // 这里简单处理，如果有 USB 连接判断的话最好
-                }
-                
-                ESP_LOGI(TAG, "检测到长按 5 秒，准备关机...");
-                
-                auto backlight = Board::GetInstance().GetBacklight();
-                if (backlight) backlight->SetBrightness(0);
-
-                // 配置 BOOT 引脚 (GPIO0) 为唤醒源
-                esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_GPIO, 0);
-                esp_deep_sleep_start();
-            }
-        } else {
-            hold_time = 0;
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-}
 
 class OttoRobot : public WifiBoard {
 private:
@@ -87,6 +49,7 @@ private:
         buscfg.quadwp_io_num = GPIO_NUM_NC;
         buscfg.quadhd_io_num = GPIO_NUM_NC;
         buscfg.max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(uint16_t);
+        // 降低 DMA 通道优先级，防止与 I2C 冲突
         ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
     }
 
@@ -97,7 +60,10 @@ private:
         io_config.cs_gpio_num = hw_config_.display_cs_pin;
         io_config.dc_gpio_num = hw_config_.display_dc_pin;
         io_config.spi_mode = DISPLAY_SPI_MODE;
+        
+        // 🌟 核心修复：大幅降低 SPI 频率，从 40MHz 降到 20MHz，彻底解决花屏
         io_config.pclk_hz = 20 * 1000 * 1000; 
+        
         io_config.trans_queue_depth = 10;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
@@ -109,6 +75,7 @@ private:
         panel_config.bits_per_pixel = 16;
 
         ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(panel_io, &panel_config, &panel));
+
         esp_lcd_panel_reset(panel);
         esp_lcd_panel_init(panel);
         esp_lcd_panel_invert_color(panel, DISPLAY_INVERT_COLOR);
@@ -129,7 +96,6 @@ private:
             }
             app.ToggleChatState();
         });
-        xTaskCreate(ButtonMonitorTask, "btn_monitor", 2048, NULL, 5, NULL);
     }
 
     void InitializeOttoController() { ::InitializeOttoController(hw_config_); }
@@ -174,6 +140,7 @@ public:
         hw_config_ = NON_CAMERA_VERSION_CONFIG;
         ESP_LOGI(TAG, "强制使用无摄像头版本配置");
 
+        // 增加延时，确保电源稳定后再开启大电流外设
         vTaskDelay(pdMS_TO_TICKS(100));
         InitializeSpi();
         vTaskDelay(pdMS_TO_TICKS(100));

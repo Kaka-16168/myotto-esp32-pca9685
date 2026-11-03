@@ -11,7 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: espressif/idf:v5.4
+    # 建议使用较稳定的 v5.3 版本，与代码兼容性更好
+    container: espressif/idf:v5.3 
     
     steps:
       - name: Checkout code
@@ -20,31 +21,39 @@ jobs:
       - name: Build Firmware
         run: |
           . $IDF_PATH/export.sh
-          # 如果你是把代码放在根目录，请把下面这行 cd 删掉
-          cd xiaozhi-esp32
+          cd xiaozhi-esp32 # 如果代码直接放在根目录，请删除此行
           
+          # 1. 深度清理任何残留的构建缓存和配置文件
+          rm -rf build
           rm -f sdkconfig
           
-          # 1. 核心板型与功能
+          # 2. 将所有自定义配置写入 sdkconfig.defaults
+          #    (这是 ESP-IDF 推荐的非交互式配置方式)
+          
+          # 2.1 核心板型与功能
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
           
-          # 2. 内存防重启配置 (N16R8 必开 8MB PSRAM)
+          # 2.2 内存防重启配置 (N16R8 必开 8MB PSRAM)
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           
-          # 3. 防止屏幕花屏
+          # 2.3 防止屏幕花屏
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 4. 唤醒词配置 (恢复默认模型以消除编译错误)
+          # 2.4 唤醒词及 OTA 自定义唤醒功能
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           echo "CONFIG_USE_CUSTOM_WAKE_WORD=y" >> sdkconfig.defaults
-          echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults  # 🌟 加回这行
-          
-          # 5. 清理并编译
+          echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults
+
+          # 3. 编译流程
+          #    set-target 会基于 sdkconfig.defaults 生成 sdkconfig
           idf.py set-target esp32s3
-          idf.py fullclean
+          
+          #    reconfigure 确保 CMake 配置完全同步
+          idf.py reconfigure
+          
           idf.py build
           idf.py merge-bin
           

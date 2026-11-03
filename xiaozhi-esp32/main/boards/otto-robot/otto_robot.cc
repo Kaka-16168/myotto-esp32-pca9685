@@ -23,6 +23,7 @@
 #include "websocket_control_server.h"
 #include "wifi_board.h"
 
+// 🌟 修复：添加 __attribute__((unused)) 
 static const char* TAG __attribute__((unused)) = "OttoRobot";
 
 extern void InitializeOttoController(const HardwareConfig& hw_config);
@@ -59,10 +60,7 @@ private:
         io_config.cs_gpio_num = hw_config_.display_cs_pin;
         io_config.dc_gpio_num = hw_config_.display_dc_pin;
         io_config.spi_mode = DISPLAY_SPI_MODE;
-        
-        // 降低 SPI 频率至 20MHz，彻底解决花屏
-        io_config.pclk_hz = 20 * 1000 * 1000; 
-        
+        io_config.pclk_hz = 40 * 1000 * 1000;
         io_config.trans_queue_depth = 10;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
@@ -118,7 +116,6 @@ public:
     }
 
     void InitializeAudioCodec() {
-        // 🌟 严格按照 config.h 中的 audio_use_simplex 进行音频引脚绑定
         if (hw_config_.audio_use_simplex) {
             audio_codec_ = new NoAudioCodecSimplex(
                 hw_config_.audio_input_sample_rate, hw_config_.audio_output_sample_rate,
@@ -138,17 +135,13 @@ public:
           audio_codec_(nullptr) {
         
         hw_config_ = NON_CAMERA_VERSION_CONFIG;
-        ESP_LOGI(TAG, "强制使用无摄像头版本配置 (纯净版)");
+        ESP_LOGI(TAG, "强制使用无摄像头版本配置 (NON_CAMERA_VERSION_CONFIG)");
 
-        vTaskDelay(pdMS_TO_TICKS(100));
         InitializeSpi();
-        vTaskDelay(pdMS_TO_TICKS(100));
         InitializeLcdDisplay();
-        vTaskDelay(pdMS_TO_TICKS(100));
         InitializeButtons();
         InitializePowerManager();
         InitializeAudioCodec();
-        vTaskDelay(pdMS_TO_TICKS(200));
 
         InitializeOttoController();
         ws_control_server_ = nullptr;

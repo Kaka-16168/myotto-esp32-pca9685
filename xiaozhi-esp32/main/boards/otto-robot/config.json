@@ -4,11 +4,7 @@
     "language": "zh-CN",
     "builds": [
         {
-            "name": "otto-robot",
-            "sdkconfig_append": [
-                "CONFIG_HTTPD_WS_SUPPORT=y",
-                "CONFIG_LANGUAGE_ZH_CN=y"
-            ]
+            "name": "otto-robot"
         }
     ]
 }

@@ -1,4 +1,4 @@
-# 设置源文件
+# Define source files
 set(SOURCES "audio/audio_codec.cc"
             "audio/audio_debugger.cc"
             "audio/audio_service.cc"
@@ -41,12 +41,12 @@ set(SOURCES "audio/audio_codec.cc"
             "device_state_machine.cc"
             "assets.cc"
             "main.cc"
-            "pca9685.cc"  # 保留这个文件
+            "pca9685.cc"
             )
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
 
-# 添加板级通用文件
+# Add board common files
 list(APPEND SOURCES
     "boards/common/board.cc"
     "boards/common/wifi_board.cc"
@@ -71,6 +71,7 @@ endif()
 list(APPEND INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/boards/common)
 
 idf_build_get_property(build_components BUILD_COMPONENTS)
+# Function to find component dynamically by pattern
 function(find_component_by_pattern PATTERN COMPONENT_VAR PATH_VAR)
     foreach(COMPONENT ${build_components})
         if(COMPONENT MATCHES "${PATTERN}")
@@ -82,11 +83,15 @@ function(find_component_by_pattern PATTERN COMPONENT_VAR PATH_VAR)
     endforeach()
 endfunction()
 
+# Set default BUILTIN_TEXT_FONT and BUILTIN_ICON_FONT
 set(BUILTIN_TEXT_FONT font_noto_sans_basic_14_1)
 set(BUILTIN_ICON_FONT font_material_symbols_14_1)
+
 set(EMOTE_RESOLUTION "320_240")
 
-# 仅保留 OTTO_ROBOT 板级配置
+# ==========================================
+# 仅保留 Otto Robot 板级配置
+# ==========================================
 if(CONFIG_BOARD_TYPE_OTTO_ROBOT)
     set(BOARD_DIR "otto-robot")
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_16_4)
@@ -102,6 +107,7 @@ set(BOARD_CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/config.js
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${BOARD_CONFIG_FILE}")
 
 set(BOARD_TYPE "")
+set(BOARD_MANUFACTURER "")
 if(EXISTS "${BOARD_CONFIG_FILE}")
     file(READ "${BOARD_CONFIG_FILE}" BOARD_CONFIG_JSON)
     string(REGEX MATCH "\"type\"[ \t\r\n]*:[ \t\r\n]*\"([^\"]+)\"" BOARD_TYPE_MATCH "${BOARD_CONFIG_JSON}")
@@ -112,15 +118,18 @@ endif()
 if(NOT BOARD_TYPE)
     string(REPLACE "/" "-" BOARD_TYPE "${BOARD_DIR}")
 endif()
+if(NOT CMAKE_BUILD_EARLY_EXPANSION AND NOT BOARD_TYPE MATCHES "^[a-z0-9.-]+$")
+    message(FATAL_ERROR "Invalid BOARD_TYPE '${BOARD_TYPE}': only lowercase letters, digits, '.' and '-' are allowed")
+endif()
 
-# 自动抓取 otto-robot 文件夹下的所有源文件
+# 🚨 自动抓取 otto-robot 文件夹下的所有 .cc 和 .c 文件
 file(GLOB BOARD_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.cc
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.c
 )
 list(APPEND SOURCES ${BOARD_SOURCES})
 
-# 选择音频引擎
+# Select one audio engine for each chip family
 if(CONFIG_IDF_TARGET_ESP32S3 OR CONFIG_IDF_TARGET_ESP32P4 OR CONFIG_IDF_TARGET_ESP32S31)
     list(APPEND SOURCES "audio/engines/afe_audio_engine.cc")
     list(APPEND SOURCES "audio/wake_words/custom_wake_word.cc")
@@ -130,11 +139,12 @@ else()
     list(APPEND SOURCES "audio/wake_words/esp_wake_word.cc")
 endif()
 
+# Auto Select Additional Sources
 if (CONFIG_USE_ESP_BLUFI_WIFI_PROVISIONING)
     list(APPEND SOURCES "boards/common/blufi.cpp")
 endif ()
 
-# 语言配置
+# Select language directory according to Kconfig (Keep only common ones to reduce bloat)
 if(CONFIG_LANGUAGE_ZH_CN)
     set(LANG_DIR "zh-CN")
 elseif(CONFIG_LANGUAGE_ZH_TW)
@@ -145,10 +155,14 @@ else()
     set(LANG_DIR "en-US")
 endif()
 
+# Define generation path
 set(LANG_JSON "${CMAKE_CURRENT_SOURCE_DIR}/assets/locales/${LANG_DIR}/language.json")
 set(LANG_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/assets/lang_config.h")
+
+# Collect current language audio files
 file(GLOB LANG_SOUNDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/locales/${LANG_DIR}/*.ogg)
 
+# If not en-US, collect en-US audio files as fallback for missing files
 if(NOT LANG_DIR STREQUAL "en-US")
     file(GLOB EN_US_SOUNDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/locales/en-US/*.ogg)
     set(EXISTING_NAMES "")
@@ -166,6 +180,7 @@ endif()
 
 file(GLOB COMMON_SOUNDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/common/*.ogg)
 
+# If target chip is ESP32, exclude specific files to avoid build errors
 if(CONFIG_IDF_TARGET_ESP32)
     list(REMOVE_ITEM SOURCES "audio/codecs/box_audio_codec.cc"
                              "audio/codecs/es8388_audio_codec.cc"
@@ -179,6 +194,7 @@ if(CONFIG_IDF_TARGET_ESP32)
                              )
 endif()
 
+# Include Esp32Camera if target is ESP32S3
 if(CONFIG_IDF_TARGET_ESP32S3)
     list(APPEND SOURCES "boards/common/esp32_camera.cc")
 endif()
@@ -197,7 +213,7 @@ idf_component_register(SRCS ${SOURCES}
                         esp_driver_gpio
                         esp_driver_uart
                         esp_driver_spi
-                        esp_driver_i2c
+                        esp_driver_i2c  # 🌟 确保这里包含了 I2C 驱动
                         esp_driver_i2s
                         esp_driver_ledc
                         esp_driver_jpeg
@@ -215,17 +231,24 @@ idf_component_register(SRCS ${SOURCES}
                         ${MAIN_PRIV_REQUIRES_EXTRA}
                     )
 
+# Keep project-owned C++ on GNU C++23.
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++23>)
 endif()
 
+# Use target_compile_definitions to define the reported board identity
 if(NOT BOARD_NAME)
     set(BOARD_NAME ${BOARD_TYPE})
 endif()
+if(NOT CMAKE_BUILD_EARLY_EXPANSION AND NOT BOARD_NAME MATCHES "^[a-z0-9.-]+$")
+    message(FATAL_ERROR "Invalid BOARD_NAME '${BOARD_NAME}': only lowercase letters, digits, '.' and '-' are allowed")
+endif()
 string(REGEX MATCH "^font_noto_sans_basic_([0-9]+)_([0-9]+)$" _font_match "${BUILTIN_TEXT_FONT}")
+if(NOT _font_match)
+    message(FATAL_ERROR "Unsupported built-in text font name: ${BUILTIN_TEXT_FONT}")
+endif()
 set(TEXT_FONT_SIZE "${CMAKE_MATCH_1}")
 set(TEXT_FONT_BPP "${CMAKE_MATCH_2}")
-
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     target_compile_definitions(${COMPONENT_LIB}
                         PRIVATE BOARD_TYPE=\"${BOARD_TYPE}\" BOARD_NAME=\"${BOARD_NAME}\"
@@ -233,6 +256,7 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
                         PRIVATE BUILTIN_TEXT_FONT=${BUILTIN_TEXT_FONT} BUILTIN_ICON_FONT=${BUILTIN_ICON_FONT}
                         PRIVATE TEXT_FONT_SIZE=${TEXT_FONT_SIZE} TEXT_FONT_BPP=${TEXT_FONT_BPP}
                         )
+    # ESP32-S3 LVGL builtin pool: PSRAM boards allocate it from PSRAM.
     if(CONFIG_IDF_TARGET_ESP32S3)
         idf_component_get_property(lvgl_lib lvgl__lvgl COMPONENT_LIB)
         if(lvgl_lib)
@@ -248,6 +272,7 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     endif()
 endif()
 
+# Add generation rules
 add_custom_command(
     OUTPUT ${LANG_HEADER}
     COMMAND python ${PROJECT_DIR}/scripts/gen_lang.py
@@ -260,24 +285,35 @@ add_custom_command(
     COMMENT "Generating ${LANG_DIR} language config"
 )
 
+# Force build generation dependencies
 add_custom_target(lang_header ALL
     DEPENDS ${LANG_HEADER}
 )
 
+# Find ESP-SR component dynamically
 find_component_by_pattern("espressif__esp-sr" ESP_SR_COMPONENT ESP_SR_COMPONENT_PATH)
 if(ESP_SR_COMPONENT_PATH)
     set(ESP_SR_MODEL_PATH "${ESP_SR_COMPONENT_PATH}/model")
 endif()
 
+# Find xiaozhi-fonts component dynamically
 find_component_by_pattern("xiaozhi-fonts" NOTO_FONTS_COMPONENT NOTO_FONTS_COMPONENT_PATH)
 if(NOTO_FONTS_COMPONENT_PATH)
     set(NOTO_FONTS_PATH "${NOTO_FONTS_COMPONENT_PATH}")
 endif()
 
+# Function to build default assets based on configuration
 function(build_default_assets_bin)
     set(GENERATED_ASSETS_BIN "${CMAKE_BINARY_DIR}/generated_assets.bin")
-    set(DEFAULT_ASSETS_DEPENDENCIES "${SDKCONFIG}" "${PROJECT_DIR}/scripts/build_default_assets.py")
-    set(BUILD_ARGS "--sdkconfig" "${SDKCONFIG}" "--output" "${GENERATED_ASSETS_BIN}")
+    set(DEFAULT_ASSETS_DEPENDENCIES
+        "${SDKCONFIG}"
+        "${PROJECT_DIR}/scripts/build_default_assets.py"
+    )
+
+    set(BUILD_ARGS
+        "--sdkconfig" "${SDKCONFIG}"
+        "--output" "${GENERATED_ASSETS_BIN}"
+    )
 
     if(BUILTIN_TEXT_FONT)
         list(APPEND BUILD_ARGS "--builtin_text_font" "${BUILTIN_TEXT_FONT}")
@@ -293,7 +329,9 @@ function(build_default_assets_bin)
 
     if(DEFAULT_EMOJI_COLLECTION)
         list(APPEND BUILD_ARGS "--emoji_collection" "${DEFAULT_EMOJI_COLLECTION}")
-        file(GLOB DEFAULT_EMOJI_FILES CONFIGURE_DEPENDS "${NOTO_FONTS_PATH}/png/${DEFAULT_EMOJI_COLLECTION}/*")
+        file(GLOB DEFAULT_EMOJI_FILES CONFIGURE_DEPENDS
+            "${NOTO_FONTS_PATH}/png/${DEFAULT_EMOJI_COLLECTION}/*"
+        )
         list(APPEND DEFAULT_ASSETS_DEPENDENCIES ${DEFAULT_EMOJI_FILES})
     endif()
 
@@ -317,7 +355,10 @@ function(build_default_assets_bin)
         VERBATIM
     )
 
-    add_custom_target(generated_default_assets ALL DEPENDS ${GENERATED_ASSETS_BIN})
+    add_custom_target(generated_default_assets ALL
+        DEPENDS ${GENERATED_ASSETS_BIN}
+    )
+
     set(GENERATED_ASSETS_LOCAL_FILE ${GENERATED_ASSETS_BIN} PARENT_SCOPE)
 endfunction()
 
@@ -328,4 +369,6 @@ if ("${size}" AND "${offset}")
         build_default_assets_bin()
         esptool_py_flash_to_partition(flash "assets" "${GENERATED_ASSETS_LOCAL_FILE}")
     endif()
+else()
+    message(STATUS "Assets partition not found, using v1 partition table")
 endif()

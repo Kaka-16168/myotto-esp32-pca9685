@@ -60,7 +60,7 @@ private:
         io_config.dc_gpio_num = hw_config_.display_dc_pin;
         io_config.spi_mode = DISPLAY_SPI_MODE;
         
-        // 🌟 核心防花屏：强制将屏幕 SPI 频率降至 20MHz，杜邦线环境绝对稳定
+        // 降低 SPI 频率至 20MHz，彻底解决花屏
         io_config.pclk_hz = 20 * 1000 * 1000; 
         
         io_config.trans_queue_depth = 10;
@@ -118,6 +118,7 @@ public:
     }
 
     void InitializeAudioCodec() {
+        // 🌟 严格按照 config.h 中的 audio_use_simplex 进行音频引脚绑定
         if (hw_config_.audio_use_simplex) {
             audio_codec_ = new NoAudioCodecSimplex(
                 hw_config_.audio_input_sample_rate, hw_config_.audio_output_sample_rate,
@@ -136,11 +137,9 @@ public:
         : boot_button_(BOOT_BUTTON_GPIO),
           audio_codec_(nullptr) {
         
-        // 🌟 强制使用无摄像头版本配置，杜绝一切 I2C 抢占
         hw_config_ = NON_CAMERA_VERSION_CONFIG;
         ESP_LOGI(TAG, "强制使用无摄像头版本配置 (纯净版)");
 
-        // 增加延时，确保电源稳定后再开启大电流外设，防止舵机启动瞬间拉低电压重启
         vTaskDelay(pdMS_TO_TICKS(100));
         InitializeSpi();
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -151,7 +150,6 @@ public:
         InitializeAudioCodec();
         vTaskDelay(pdMS_TO_TICKS(200));
 
-        // 初始化舵机控制器 (I2C 也是在这里面启动)
         InitializeOttoController();
         ws_control_server_ = nullptr;
         GetBacklight()->RestoreBrightness();

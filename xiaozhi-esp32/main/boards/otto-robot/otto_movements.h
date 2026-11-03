@@ -6,19 +6,12 @@
 #define SERVO_COUNT 6
 
 enum ServoIndex {
-    LEFT_LEG = 0,
-    RIGHT_LEG = 1,
-    LEFT_FOOT = 2,
-    RIGHT_FOOT = 3,
-    LEFT_HAND = 4,
-    RIGHT_HAND = 5
+    LEFT_LEG = 0, RIGHT_LEG = 1, LEFT_FOOT = 2,
+    RIGHT_FOOT = 3, LEFT_HAND = 4, RIGHT_HAND = 5
 };
 
 enum Direction {
-    FORWARD = 1,
-    BACKWARD = -1,
-    LEFT = 1,
-    RIGHT = -1
+    FORWARD = 1, BACKWARD = -1, LEFT = 1, RIGHT = -1
 };
 
 class Otto {
@@ -41,6 +34,7 @@ public:
     bool GetRestState();
     void SetRestState(bool state);
 
+    // ================= 基础动作 =================
     void Jump(float steps, int period);
     void Walk(float steps, int period, int dir, int amount);
     void Turn(float steps, int period, int dir, int amount);
@@ -57,6 +51,7 @@ public:
     void Flapping(float steps, int period, int height, int dir);
     void WhirlwindLeg(float steps, int period, int amplitude);
     
+    // ================= 手部动作 =================
     void HandsUp(int period, int dir);
     void HandsDown(int period, int dir);
     void HandWave(int dir);
@@ -75,7 +70,7 @@ public:
 private:
     int servo_pins_[SERVO_COUNT];
     int servo_trim_[SERVO_COUNT];
-    int current_positions_[SERVO_COUNT]; // 🌟 记录当前位置，用于插值计算
+    int current_positions_[SERVO_COUNT];
     bool is_otto_resting_;
     bool has_hands_;
 };

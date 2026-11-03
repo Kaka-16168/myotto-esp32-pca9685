@@ -20,19 +20,18 @@ jobs:
       - name: Build Firmware
         run: |
           . $IDF_PATH/export.sh
-          cd xiaozhi-esp32  # 如果你是把内容直接放在了根目录，请把这行删掉
+          cd xiaozhi-esp32
           
-          # 清理旧配置
-          rm -f sdkconfig
+          # 核心修复：强制清理所有旧的构建缓存和配置
+          rm -rf build sdkconfig sdkconfig.old
           
-          # 注入 PSRAM 等配置
+          # 注入核心配置
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 🌟 核心修复：传入 --language zh-CN 彻底解决语言报错
-          # 官方脚本会自动把唤醒词模型打包到 assets 分区
+          # 使用官方脚本构建，它会自动处理唤醒词模型
           python scripts/build.py otto-robot --language zh-CN
           
           # 合并固件

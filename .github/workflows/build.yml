@@ -17,15 +17,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Clean and Build Firmware
+      - name: Build Firmware
         run: |
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 彻底清理所有历史缓存和配置，防止旧 sdkconfig 覆盖新设置
+          # 彻底清理所有缓存和配置文件
           rm -rf build sdkconfig sdkconfig.old
           
-          # 直接调用官方脚本，唤醒词和语言由 config.json 及 --language 参数控制
+          # 直接调用官方脚本，语言和唤醒词由 config.json 和 --language 参数控制
           python scripts/build.py otto-robot --language zh-CN
           
           # 合并固件

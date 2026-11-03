@@ -11,32 +11,24 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 锁定 v5.5 版本，完美兼容当前的 esp-sr 唤醒词和小智框架
     container: espressif/idf:v5.5 
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Build Firmware
+      - name: Clean and Build Firmware
         run: |
           . $IDF_PATH/export.sh
-          # 如果你是把 xiaozhi-esp32 里面的文件直接放在了仓库根目录，请删掉下面这行 cd
           cd xiaozhi-esp32
           
-          # 彻底清理所有历史缓存，防止旧配置干扰
+          # 彻底清理所有历史缓存和配置，防止旧 sdkconfig 覆盖新设置
           rm -rf build sdkconfig sdkconfig.old
           
-          # 注入 N16R8 必须的 PSRAM 开启配置 (IDF 5.5 标准写法)
-          echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
-          echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
-          echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
-          echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
-          
-          # 使用官方脚本编译，它会自动打包唤醒词模型并处理语言
+          # 直接调用官方脚本，唤醒词和语言由 config.json 及 --language 参数控制
           python scripts/build.py otto-robot --language zh-CN
           
-          # 编译完成后合并固件
+          # 合并固件
           cd build
           esptool.py --chip esp32s3 merge_bin -o merged-binary.bin @flash_args
           

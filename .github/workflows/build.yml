@@ -22,16 +22,16 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 核心修复：强制清理所有旧的构建缓存和配置
+          # 彻底清理可能残留的旧配置
           rm -rf build sdkconfig sdkconfig.old
           
-          # 注入核心配置
+          # 在 build.py 运行前注入基础硬件配置
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 使用官方脚本构建，它会自动处理唤醒词模型
+          # 调用官方脚本，唤醒词由 config.json 中的 wake_word 字段自动处理
           python scripts/build.py otto-robot --language zh-CN
           
           # 合并固件

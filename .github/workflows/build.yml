@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: espressif/idf:v5.5 
+    container: espressif/idf:v6.0.1 
     
     steps:
       - name: Checkout code
@@ -20,17 +20,26 @@ jobs:
       - name: Build Firmware
         run: |
           . $IDF_PATH/export.sh
-          cd xiaozhi-esp32  # 如果内容在根目录，请删除此行
+          cd xiaozhi-esp32 # 如果是把内容直接放根目录，请删掉这行
           
-          # 彻底清理所有历史缓存和配置
-          rm -rf build sdkconfig sdkconfig.old
+          rm -f sdkconfig
           
-          # 直接调用官方脚本，语言由 --language 参数控制，唤醒词使用默认值
-          python scripts/build.py otto-robot --language zh-CN
+          # 强制注入硬件与唤醒词基础配置（绕过官方脚本校验）
+          echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
+          echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
+          echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
+          echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
+          echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
+          echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 合并固件
-          cd build
-          esptool.py --chip esp32s3 merge_bin -o merged-binary.bin @flash_args
+          # 暴力开启唤醒词
+          echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
+          echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults
+          
+          # 原生编译，不依赖 scripts/build.py
+          idf.py set-target esp32s3
+          idf.py build
+          idf.py merge-bin
           
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

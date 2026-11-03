@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: espressif/idf:v6.0.1 
+    container: espressif/idf:v6.0.1 # 使用 v6.0.1 完美适配新版 I2C 驱动
     
     steps:
       - name: Checkout code
@@ -20,23 +20,23 @@ jobs:
       - name: Build Firmware
         run: |
           . $IDF_PATH/export.sh
-          cd xiaozhi-esp32 # 如果是把内容直接放根目录，请删掉这行
+          cd xiaozhi-esp32 # 如果你是把内容直接放在了根目录，请把这行删掉
           
           rm -f sdkconfig
           
-          # 强制注入硬件与唤醒词基础配置（绕过官方脚本校验）
+          # 强制锁定 Otto 板型
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
+          
+          # 内存防重启配置 (N16R8 必开 8MB PSRAM)
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
+          
+          # 防止 SPI 花屏
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 暴力开启唤醒词
-          echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
-          echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults
-          
-          # 原生编译，不依赖 scripts/build.py
+          # 编译并合并固件
           idf.py set-target esp32s3
           idf.py build
           idf.py merge-bin
@@ -45,5 +45,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: otto-esp32s3-firmware
-          path: xiaozhi-esp32/build/merged-binary.bin
+          path: xiaozhi-esp32/build/merged-binary.bin # 千万注意不要有中文句号
           if-no-files-found: error

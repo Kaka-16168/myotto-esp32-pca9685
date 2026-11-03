@@ -5,7 +5,6 @@
     "builds": [
         {
             "name": "otto-robot",
-            "wake_word": "wn9_nihaoxiaozhi_tts",
             "sdkconfig_append": [
                 "CONFIG_HTTPD_WS_SUPPORT=y",
                 "CONFIG_LANGUAGE_ZH_CN=y"

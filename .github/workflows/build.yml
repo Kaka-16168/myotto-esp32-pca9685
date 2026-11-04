@@ -11,8 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 🌟 核心修改：切换到与 xiaozhi-esp32 兼容性极佳的 v5.3 版本
-    container: espressif/idf:v5.3 
+    # 🌟 核心修改：升级到推荐的 release-v6.1 分支，彻底解决加密库兼容性问题
+    container: espressif/idf:release-v6.1
     
     steps:
       - name: Checkout code
@@ -23,7 +23,7 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 彻底清理构建目录和配置文件
+          # 🌟 彻底清理构建目录和配置文件，防止任何旧缓存干扰
           rm -rf build
           rm -f sdkconfig
           

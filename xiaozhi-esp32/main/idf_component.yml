@@ -1,5 +1,14 @@
 dependencies:
   idf: ">=6.0.1"
-  espressif/freetype: "^2.14.3"
-  lvgl/lvgl: ">=8.3.0"
+  espressif/freetype: "^2.14.3"  # 显式声明 FreeType 及其版本
+  lvgl/lvgl: "~8.3.11"           # 锁定 LVGL 版本，避免自动解析到不兼容的新版本
   espressif/esp-sr: "*"
+  espressif/button: "~3.3.2"     # 锁定 button 版本，避免版本冲突
+  espressif/esp_lcd_touch: "*"
+  espressif/esp_lcd_touch_ft5x06: "*"
+  espressif/esp_lcd_touch_gt911: "*"
+  espressif/esp_lcd_touch_cst816s: "*"
+  espressif/esp_lcd_touch_axs5106: "*"
+  espressif/esp_lcd_touch_chsc6540: "*"
+  espressif/esp_lcd_touch_tt21100: "*"
+  # ... 如果还有其他依赖，请按此格式添加，并尽量使用 "~" 来锁定小版本

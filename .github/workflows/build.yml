@@ -24,27 +24,24 @@ jobs:
           
           rm -f sdkconfig
           
-          # 1. 核心板型与功能
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
-          
-          # 2. 内存防重启配置 (N16R8 必开 8MB PSRAM)
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
-          
-          # 3. 防止花屏配置
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
-          
-          # 4. 开启默认自定义唤醒词能力
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           
-          # 5. 清理并编译
+          # 💡 关键配置1：关闭警告视为错误（防止第三方库警告中断编译）
+          echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
+          
           idf.py set-target esp32s3
           
-          # 🌟 核心修复：使用环境变量限制并行编译数，防止内存溢出 (OOM)
-          export IDF_PY_BUILD_JOBS=4
-          idf.py build
+          # 💡 关键配置2：限制为单线程，将内存占用降至最低
+          export IDF_PY_BUILD_JOBS=1
+          
+          # 💡 关键配置3：使用 -v 输出详细日志
+          idf.py -v build
           
           idf.py merge-bin
           

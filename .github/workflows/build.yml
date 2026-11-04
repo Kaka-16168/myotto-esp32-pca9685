@@ -22,29 +22,27 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 1. 彻底清理构建缓存
+          # 🌟 1. 最彻底的清理：删除所有可能残留的缓存文件和目录
           rm -rf build
           rm -f sdkconfig
+          rm -f sdkconfig.old
+          rm -rf managed_components
+          rm -f dependencies.lock
           
-          # 2. 核心板型与功能
+          # 🌟 2. 核心配置：明确禁用 FreeType 并关闭严格警告
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
-          
-          # 3. 内存防重启配置 (N16R8 必开 8MB PSRAM)
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
-          
-          # 4. 屏幕防花屏与唤醒词配置
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
-          
-          # 5. 关闭严格警告检查（解决 cpp 等默认警告导致的编译中断）
           echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_GCC15_WARNINGS=y" >> sdkconfig.defaults
+          echo "CONFIG_LV_USE_FREETYPE=n" >> sdkconfig.defaults  # 明确禁用
           
-          # 6. 设置目标并单线程编译
+          # 3. 设置目标并编译
           idf.py set-target esp32s3
           export IDF_PY_BUILD_JOBS=1
           idf.py build

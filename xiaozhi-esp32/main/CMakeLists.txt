@@ -212,8 +212,7 @@ idf_component_register(SRCS ${SOURCES}
                     )
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
-    target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++23>)
-    # 安全地针对 main 组件关闭 -Werror
+    # 兼容 v5.5，关闭 main 组件内部的 -Werror
     target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-error>)
     target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wno-error>)
 endif()

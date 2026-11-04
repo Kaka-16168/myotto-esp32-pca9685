@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: espressif/idf:v6.0.1 # 使用 v6.0.1 完美适配新版 I2C 驱动
+    container: espressif/idf:v6.0.1 
     
     steps:
       - name: Checkout code
@@ -20,23 +20,26 @@ jobs:
       - name: Build Firmware
         run: |
           . $IDF_PATH/export.sh
-          cd xiaozhi-esp32 # 如果你是把内容直接放在了根目录，请把这行删掉
+          cd xiaozhi-esp32
           
           rm -f sdkconfig
           
-          # 强制锁定 Otto 板型
+          # 1. 核心板型与功能
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
           
-          # 内存防重启配置 (N16R8 必开 8MB PSRAM)
+          # 2. 内存防重启配置 (N16R8 必开 8MB PSRAM)
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           
-          # 防止 SPI 花屏
+          # 3. 防止花屏配置
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 编译并合并固件
+          # 🌟 移除强制指定唤醒词，开启默认自定义唤醒词能力
+          echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
+          
+          # 4. 清理并编译
           idf.py set-target esp32s3
           idf.py build
           idf.py merge-bin

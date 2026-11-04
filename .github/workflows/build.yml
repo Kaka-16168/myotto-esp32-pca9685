@@ -22,6 +22,7 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
+          # 清理旧的配置文件，确保新参数生效
           rm -f sdkconfig
           
           # 1. 核心板型与功能
@@ -33,7 +34,7 @@ jobs:
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           
-          # 3. 防止花屏配置
+          # 3. 防止屏幕花屏配置
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
           # 4. 开启默认自定义唤醒词能力
@@ -42,18 +43,20 @@ jobs:
           # 5. 关闭字符串写入警告检查，避免第三方库在 -Werror 下报错
           echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
           
-          # 6. 清理并编译
+          # 6. 设置目标芯片为 ESP32-S3
           idf.py set-target esp32s3
           
-          # 限制并行编译数防内存溢出，并开启详细日志
-          export IDF_PY_BUILD_JOBS=4
-          idf.py -v build
+          # 🌟 核心修复：强制限制为单线程编译，彻底解决 GitHub Actions 内存溢出（OOM）导致的中断
+          export IDF_PY_BUILD_JOBS=1
           
+          # 开始编译并合并固件
+          idf.py build
           idf.py merge-bin
           
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: otto-esp32s3-firmware
+          # 注意：路径不能多出任何标点符号
           path: xiaozhi-esp32/build/merged-binary.bin
           if-no-files-found: error

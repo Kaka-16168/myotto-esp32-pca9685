@@ -11,8 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 🌟 核心修改：切换到 v5.4.1 稳定版，避开 v5.5 的解析 Bug
-    container: espressif/idf:v5.4.1
+    # 🌟 核心修改：切换到与 xiaozhi-esp32 兼容性极佳的 v5.3 版本
+    container: espressif/idf:v5.3 
     
     steps:
       - name: Checkout code
@@ -23,7 +23,7 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 彻底清理
+          # 彻底清理构建目录和配置文件
           rm -rf build
           rm -f sdkconfig
           
@@ -35,11 +35,10 @@ jobs:
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
+          echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
           
           # 设置目标并编译
           idf.py set-target esp32s3
-          
-          # 限制单线程防内存溢出
           export IDF_PY_BUILD_JOBS=1
           idf.py build
           

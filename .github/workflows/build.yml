@@ -22,8 +22,10 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 🌟 核心清理步骤：彻底清除旧缓存和配置
+          # 🌟 彻底清理，确保依赖重新解析
           rm -rf build
+          rm -rf managed_components
+          rm -f dependencies.lock
           rm -f sdkconfig
           
           # 基础配置
@@ -35,12 +37,11 @@ jobs:
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
-          echo "CONFIG_LV_USE_FREETYPE=n" >> sdkconfig.defaults
           
           # 设置目标并编译
           idf.py set-target esp32s3
           
-          # 限制单线程，输出详细日志以便排查
+          # 单线程编译，防止内存溢出
           export IDF_PY_BUILD_JOBS=1
           idf.py build
           

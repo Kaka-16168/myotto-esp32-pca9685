@@ -22,13 +22,13 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 🌟 暴力清理：删除所有可能导致冲突的本地缓存
+          # 1. 彻底清理可能引发版本冲突的旧缓存与依赖锁定文件
           rm -rf build
           rm -f sdkconfig sdkconfig.old
           rm -rf managed_components
           rm -f dependencies.lock
           
-          # 核心配置
+          # 2. 基础硬件配置
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
@@ -37,13 +37,13 @@ jobs:
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           
-          # 规避严格检查与 FreeType 报错
+          # 3. 规避严格编译检查与 FreeType 报错
           echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_GCC15_WARNINGS=y" >> sdkconfig.defaults
           echo "CONFIG_LV_USE_FREETYPE=n" >> sdkconfig.defaults
           
-          # 编译流程
+          # 4. 配置目标芯片并编译
           idf.py set-target esp32s3
           export IDF_PY_BUILD_JOBS=1
           idf.py build

@@ -1,10 +1,3 @@
-# =====================================================================
-# 🌟 核心修复：全局关闭 -Werror 选项，防止底层第三方库（如 mbedtls）报错中断
-# =====================================================================
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error")
-add_compile_options(-Wno-error)
-
 # Define source files
 set(SOURCES "audio/audio_codec.cc"
             "audio/audio_debugger.cc"
@@ -53,7 +46,6 @@ set(SOURCES "audio/audio_codec.cc"
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
 
-# Add board common files
 list(APPEND SOURCES
     "boards/common/board.cc"
     "boards/common/wifi_board.cc"
@@ -93,7 +85,6 @@ set(BUILTIN_TEXT_FONT font_noto_sans_basic_14_1)
 set(BUILTIN_ICON_FONT font_material_symbols_14_1)
 set(EMOTE_RESOLUTION "320_240")
 
-# 🌟 仅保留 OTTO_ROBOT 的判断
 if(CONFIG_BOARD_TYPE_OTTO_ROBOT)
     set(BOARD_DIR "otto-robot")
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_16_4)
@@ -121,7 +112,6 @@ if(NOT BOARD_TYPE)
     string(REPLACE "/" "-" BOARD_TYPE "${BOARD_DIR}")
 endif()
 
-# 🚨 自动抓取 otto-robot 文件夹下的所有源文件
 file(GLOB BOARD_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.cc
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.c
@@ -223,7 +213,7 @@ idf_component_register(SRCS ${SOURCES}
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++23>)
-    # 🌟 二次保障：确保 main 组件及其子文件也忽略警告
+    # 安全地针对 main 组件关闭 -Werror
     target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-error>)
     target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wno-error>)
 endif()
@@ -242,7 +232,6 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
                         PRIVATE BUILTIN_TEXT_FONT=${BUILTIN_TEXT_FONT} BUILTIN_ICON_FONT=${BUILTIN_ICON_FONT}
                         PRIVATE TEXT_FONT_SIZE=${TEXT_FONT_SIZE} TEXT_FONT_BPP=${TEXT_FONT_BPP}
                         )
-    # ESP32-S3 LVGL builtin pool: PSRAM boards allocate it from PSRAM.
     if(CONFIG_IDF_TARGET_ESP32S3)
         idf_component_get_property(lvgl_lib lvgl__lvgl COMPONENT_LIB)
         if(lvgl_lib)
@@ -258,7 +247,6 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     endif()
 endif()
 
-# Add generation rules
 add_custom_command(
     OUTPUT ${LANG_HEADER}
     COMMAND python ${PROJECT_DIR}/scripts/gen_lang.py
@@ -271,9 +259,7 @@ add_custom_command(
     COMMENT "Generating ${LANG_DIR} language config"
 )
 
-add_custom_target(lang_header ALL
-    DEPENDS ${LANG_HEADER}
-)
+add_custom_target(lang_header ALL DEPENDS ${LANG_HEADER})
 
 find_component_by_pattern("espressif__esp-sr" ESP_SR_COMPONENT ESP_SR_COMPONENT_PATH)
 if(ESP_SR_COMPONENT_PATH)

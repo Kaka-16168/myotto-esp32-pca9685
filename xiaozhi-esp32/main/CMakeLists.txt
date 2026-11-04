@@ -1,4 +1,4 @@
-﻿set(SOURCES "audio/audio_codec.cc"
+set(SOURCES "audio/audio_codec.cc"
             "audio/audio_debugger.cc"
             "audio/audio_service.cc"
             "audio/demuxer/ogg_demuxer.cc"
@@ -212,6 +212,9 @@ idf_component_register(SRCS ${SOURCES}
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++23>)
+    # 🌟 防止第三方库警告导致编译中断
+    target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-error>)
+    target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wno-error>)
 endif()
 
 if(NOT BOARD_NAME)

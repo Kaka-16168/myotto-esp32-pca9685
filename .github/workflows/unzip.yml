@@ -17,8 +17,8 @@ jobs:
       - name: Unzip files
         run: |
           # 这里已经精准匹配你截图里的压缩包名字
-          unzip myotto-esp32-pca9685.zip -d .
-          rm myotto-esp32-pca9685.zip
+          unzip xiaozhi-esp32.zip -d .
+          rm xiaozhi-esp32.zip
 
       - name: Commit unzipped files
         run: |

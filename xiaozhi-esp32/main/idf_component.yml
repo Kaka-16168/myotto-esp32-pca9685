@@ -1,12 +1,11 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  idf: ">=5.5.0"
+  idf: ">=5.0" # 🌟 改为 5.0 以上即可
 
   # 核心 UI 与字体
   lvgl/lvgl: "^9.2.0"
   espressif/esp_lvgl_port: "^2.5.0"
   78/xiaozhi-fonts: "^1.0.0"
-  espressif/freetype: "^2.13.1" # 🌟 关键：显式引入以解决 LV_USE_FREETYPE 报错
   espressif/esp_mmap_assets: "^1.4.0"
   espressif/esp_image_effects: "^1.1.0"
   espressif2022/esp_emote_expression: "^1.0.2"

@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: espressif/idf:release-v6.1
+    container: espressif/idf:release-v6.1 # 必须使用 release/v6.1 分支
     
     steps:
       - name: Checkout code
@@ -22,7 +22,7 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 1. 彻底清理可能引发版本冲突的旧缓存与依赖锁定文件
+          # 1. 暴力清理所有可能导致依赖冲突的旧缓存文件
           rm -rf build
           rm -f sdkconfig sdkconfig.old
           rm -rf managed_components
@@ -37,13 +37,12 @@ jobs:
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           
-          # 3. 规避严格编译检查与 FreeType 报错
+          # 3. 规避严格编译检查
           echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_GCC15_WARNINGS=y" >> sdkconfig.defaults
-          echo "CONFIG_LV_USE_FREETYPE=n" >> sdkconfig.defaults
           
-          # 4. 配置目标芯片并编译
+          # 4. 编译
           idf.py set-target esp32s3
           export IDF_PY_BUILD_JOBS=1
           idf.py build

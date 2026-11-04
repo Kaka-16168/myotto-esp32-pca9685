@@ -199,12 +199,9 @@ private:
                     ESP_LOGI(TAG, "闹钟触发！");
                     auto& app = Application::GetInstance();
                     
-                    app.PlaySound("exclamation");
-                    vTaskDelay(pdMS_TO_TICKS(500));
-                    app.PlaySound("exclamation");
-                    vTaskDelay(pdMS_TO_TICKS(500));
-                    
+                    // 🌟 使用标准接口强制唤醒并播报
                     app.Alert("主人 时间到了", "neutral", "exclamation");
+                    
                     auto display = Board::GetInstance().GetDisplay();
                     if (display) display->SetChatMessage("assistant", "主人 时间到了");
 

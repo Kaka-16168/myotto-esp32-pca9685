@@ -22,21 +22,19 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 彻底清理所有缓存与锁定文件
+          # 1. 彻底清理本地缓存的旧组件
           rm -rf build
           rm -f sdkconfig sdkconfig.old
           rm -rf managed_components
           rm -f dependencies.lock
           
-          # 基础硬件配置
+          # 2. 基础配置
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
-          
-          # 语音唤醒与 ESP-SR 模型配置
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults
           
@@ -46,8 +44,21 @@ jobs:
           echo "CONFIG_COMPILER_DISABLE_GCC15_WARNINGS=y" >> sdkconfig.defaults
           echo "CONFIG_LV_USE_FREETYPE=n" >> sdkconfig.defaults
           
-          # 编译并生成合并固件
+          # 3. 生成目标配置（这一步会触发组件管理器下载 xiaozhi-fonts）
           idf.py set-target esp32s3
+          
+          # 4. 🌟 核心修复：拦截并修改云端自动下载的字体组件源码
+          echo "==== 正在修复 LVGL API 参数不兼容问题 ===="
+          FONT_DIR="managed_components/78__xiaozhi-fonts/src"
+          if [ -d "$FONT_DIR" ]; then
+              # 查找所有包含 3 个参数的调用，并删除最后一个 NULL 参数
+              find "$FONT_DIR" -name "*.c" -exec sed -i 's/lv_imgfont_create(\(.*\), NULL)/lv_imgfont_create(\1)/g' {} +
+              echo "修复完成。"
+          else
+              echo "警告：找不到 $FONT_DIR 目录，可能依赖版本已更新或发生变化。"
+          fi
+          
+          # 5. 单线程编译并合并固件
           export IDF_PY_BUILD_JOBS=1
           idf.py build
           idf.py merge-bin

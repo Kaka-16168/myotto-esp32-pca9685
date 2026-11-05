@@ -21,7 +21,6 @@ jobs:
         run: |
           . $IDF_PATH/export.sh
           
-          # 如果你的项目在仓库根目录的子文件夹中，请确保路径正确
           cd xiaozhi-esp32
           
           # 1. 暴力清理所有可能导致依赖冲突的缓存

@@ -22,21 +22,25 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 彻底清理缓存
+          # 暴力清理所有缓存与锁定文件
           rm -rf build
           rm -f sdkconfig sdkconfig.old
           rm -rf managed_components
           rm -f dependencies.lock
           
-          # 写入配置
+          # 基础硬件配置
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
+          
+          # 语音唤醒模型配置
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults
+          
+          # 规避编译严格检查与 FreeType 冲突
           echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_GCC15_WARNINGS=y" >> sdkconfig.defaults

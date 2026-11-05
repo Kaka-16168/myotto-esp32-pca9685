@@ -1,5 +1,5 @@
 dependencies:
   idf: ">=6.0.1"
-  lvgl/lvgl: "^8.3.0"
+  lvgl/lvgl: "~9.5.0"           # 升级至 LVGL 9.x 系列
+  78/xiaozhi-fonts: "~1.4.0"    # 指定兼容 LVGL 9 的字体组件版本
   espressif/esp-sr: "*"
-  78/xiaozhi-fonts: "~1.3.2" # 🌟 补全缺失的字体组件依赖

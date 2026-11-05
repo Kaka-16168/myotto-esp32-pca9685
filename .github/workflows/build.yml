@@ -20,12 +20,14 @@ jobs:
       - name: Build Firmware
         run: |
           . $IDF_PATH/export.sh
-          cd xiaozhi-esp32
           
-          # 1. 清理残留状态
+          echo "当前所在工作目录: $(pwd)"
+          echo "当前目录文件列表:" && ls -la
+          
+          # 1. 彻底清理构建残留（避免 CMakeCache 冲突）
           rm -rf build sdkconfig sdkconfig.old managed_components dependencies.lock
           
-          # 2. 硬件与功能配置
+          # 2. 写入硬件与功能配置
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
@@ -33,11 +35,9 @@ jobs:
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
-          
-          # 强制指定 WakeNet 模型
           echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI=y" >> sdkconfig.defaults
           
-          # 3. 放宽第三方代码与工具链检查限制
+          # 3. 规避编译警告与工具链检查
           echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_GCC15_WARNINGS=y" >> sdkconfig.defaults
@@ -46,14 +46,20 @@ jobs:
           # 4. 配置与编译
           idf.py set-target esp32s3
           export IDF_PY_BUILD_JOBS=2
-          
-          idf.py reconfigure
           idf.py build
           idf.py merge-bin
           
-      - name: Upload Artifacts
+      - name: Upload Firmware
         uses: actions/upload-artifact@v4
         with:
           name: otto-esp32s3-firmware
-          path: xiaozhi-esp32/build/merged-binary.bin
+          path: build/merged-binary.bin
           if-no-files-found: error
+
+      - name: Upload Build Logs (On Failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmake-error-logs
+          path: build/log/
+          if-no-files-found: ignore

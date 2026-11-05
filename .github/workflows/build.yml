@@ -22,7 +22,7 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 暴力清理所有缓存与锁定文件
+          # 彻底清理所有缓存与锁定文件
           rm -rf build
           rm -f sdkconfig sdkconfig.old
           rm -rf managed_components
@@ -36,7 +36,7 @@ jobs:
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
           
-          # 语音唤醒模型配置
+          # 语音唤醒与 ESP-SR 模型配置
           echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults
           
@@ -46,7 +46,7 @@ jobs:
           echo "CONFIG_COMPILER_DISABLE_GCC15_WARNINGS=y" >> sdkconfig.defaults
           echo "CONFIG_LV_USE_FREETYPE=n" >> sdkconfig.defaults
           
-          # 编译
+          # 编译并生成合并固件
           idf.py set-target esp32s3
           export IDF_PY_BUILD_JOBS=1
           idf.py build

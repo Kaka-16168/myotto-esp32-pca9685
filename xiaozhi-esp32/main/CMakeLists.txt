@@ -212,7 +212,6 @@ idf_component_register(SRCS ${SOURCES}
                     )
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
-    # 针对 main 组件屏蔽 -Werror
     target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-error>)
     target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wno-error>)
 endif()

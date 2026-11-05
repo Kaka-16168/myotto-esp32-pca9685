@@ -81,7 +81,7 @@ function(find_component_by_pattern PATTERN COMPONENT_VAR PATH_VAR)
     endforeach()
 endfunction()
 
-# 【提前查找组件，确保依赖注入成功】
+# 【1. 提前查找组件，确保依赖注入成功】
 find_component_by_pattern("espressif__esp-sr" ESP_SR_COMPONENT ESP_SR_COMPONENT_PATH)
 if(ESP_SR_COMPONENT_PATH)
     set(ESP_SR_MODEL_PATH "${ESP_SR_COMPONENT_PATH}/model")
@@ -191,7 +191,7 @@ if(CONFIG_IDF_TARGET_ESP32S3)
 endif()
 
 set(MAIN_PRIV_REQUIRES_EXTRA "")
-# 【动态注入依赖项】
+# 【2. 动态注入依赖项】
 if(NOTO_FONTS_COMPONENT)
     list(APPEND MAIN_PRIV_REQUIRES_EXTRA ${NOTO_FONTS_COMPONENT})
 else()
@@ -331,5 +331,6 @@ if ("${size}" AND "${offset}")
     endif()
 endif()
 
-# 针对 xiaozhi-fonts 等第三方组件，放宽 int-conversion 严格检查
+# 【3. 关键修复：在文件末尾添加编译选项，将 int-conversion 警告降级】
+# 将此命令放在文件末尾，可以确保它作用于所有已经通过 idf_component_register 注册的组件
 idf_build_set_property(COMPILE_OPTIONS "-Wno-error=int-conversion" APPEND)

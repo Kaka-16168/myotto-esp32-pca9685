@@ -42,10 +42,12 @@ set(SOURCES "audio/audio_codec.cc"
             "assets.cc"
             "main.cc"
             "pca9685.cc" 
+            "boards/common/http.cc" # 🌟 补上刚新建的 http.cc
             )
 
-set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
+set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols" "boards/common")
 
+# Add board common files
 list(APPEND SOURCES
     "boards/common/board.cc"
     "boards/common/wifi_board.cc"
@@ -190,6 +192,7 @@ idf_component_register(SRCS ${SOURCES}
                         esp_psram
                         esp_netif
                         esp_eth
+                        esp_http_client # 🌟 增加 HTTP 客户端依赖
                         esp_driver_gpio
                         esp_driver_uart
                         esp_driver_spi

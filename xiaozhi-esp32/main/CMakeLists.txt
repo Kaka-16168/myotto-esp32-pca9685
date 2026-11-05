@@ -42,7 +42,11 @@ set(SOURCES "audio/audio_codec.cc"
             "assets.cc"
             "main.cc"
             "pca9685.cc" 
-            "boards/common/http.cc" # 🌟 补上刚新建的 http.cc
+            # 🌟 核心补充：将新增的底层网络组件源文件加入编译
+            "boards/common/http.cc"
+            "boards/common/web_socket.cc"
+            "boards/common/mqtt.cc"
+            "boards/common/udp.cc"
             )
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols" "boards/common")
@@ -192,7 +196,9 @@ idf_component_register(SRCS ${SOURCES}
                         esp_psram
                         esp_netif
                         esp_eth
-                        esp_http_client # 🌟 增加 HTTP 客户端依赖
+                        esp_http_client       # HTTP 依赖
+                        esp_websocket_client  # 🌟 WebSocket 依赖
+                        mqtt                  # 🌟 MQTT 依赖 (IDF中通常名为mqtt)
                         esp_driver_gpio
                         esp_driver_uart
                         esp_driver_spi
@@ -242,7 +248,7 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
                 target_compile_definitions(${lvgl_lib} PRIVATE
                     "LV_MEM_POOL_INCLUDE=\"lvgl_psram_pool.h\"")
             elseif(CONFIG_LV_USE_BUILTIN_MALLOC)
-                target_compile_definitions(${lvgl_lib} PRIVATE
+                target_compile_definitions($lvgl_lib} PRIVATE
                     "LV_MEM_POOL_INCLUDE=\"lvgl_no_psram_pool.h\"")
             endif()
         endif()

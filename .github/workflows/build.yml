@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: espressif/idf:release-v6.1 
+    container: espressif/idf:release-v6.1
     
     steps:
       - name: Checkout code
@@ -20,37 +20,37 @@ jobs:
       - name: Build Firmware
         run: |
           . $IDF_PATH/export.sh
-          
-          # 如果你的项目在仓库根目录的子文件夹中，请确保路径正确
           cd xiaozhi-esp32
           
-          # 1. 暴力清理所有可能导致依赖冲突的缓存
+          # 1. 暴力清理构建缓存，防止旧配置残留
           rm -rf build
           rm -f sdkconfig sdkconfig.old
           rm -rf managed_components
           rm -f dependencies.lock
           
-          # 2. 基础硬件配置
+          # 2. 硬件与外设核心配置
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
-          echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
           
-          # 3. 规避严格编译检查
+          # 3. 语音唤醒与 ESP-SR 模型配置（解决 Wake-word detection 报错）
+          echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
+          echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults
+          echo "CONFIG_SR_WN_WN9S_NIHAOXIAOZHI=y" >> sdkconfig.defaults
+          echo "CONFIG_MODEL_IN_SPIFFS=n" >> sdkconfig.defaults
+          
+          # 4. 规避编译严格检查与 FreeType 冲突
           echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_GCC15_WARNINGS=y" >> sdkconfig.defaults
           echo "CONFIG_LV_USE_FREETYPE=n" >> sdkconfig.defaults
           
-          # 4. 编译
+          # 5. 编译
           idf.py set-target esp32s3
-          export IDF_PY_BUILD_JOBS=2 
-          
-          idf.py reconfigure
-          
+          export IDF_PY_BUILD_JOBS=1
           idf.py build
           
           idf.py merge-bin

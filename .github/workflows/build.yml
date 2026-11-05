@@ -11,50 +11,53 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: espressif/idf:release-v6.1 
+    container: espressif/idf:release-v6.1
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         
       - name: Build Firmware
-        working-directory: xiaozhi-esp32
         run: |
           . $IDF_PATH/export.sh
           
-          echo "当前工作目录: $(pwd)"
-          ls -la CMakeLists.txt
+          # 🌟 进入真正的工程目录（非常重要）
+          cd xiaozhi-esp32
           
-          # 1. 清理构建残留
-          rm -rf build sdkconfig sdkconfig.old managed_components dependencies.lock
+          # 1. 暴力清理构建缓存，防止旧版冲突组件死灰复燃
+          rm -rf build
+          rm -f sdkconfig sdkconfig.old
+          rm -rf managed_components
+          rm -f dependencies.lock
           
-          # 2. 写入硬件与功能配置
+          # 2. 基础硬件配置
           echo "CONFIG_BOARD_TYPE_OTTO_ROBOT=y" >> sdkconfig.defaults
           echo "CONFIG_HTTPD_WS_SUPPORT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_MODE_OCT=y" >> sdkconfig.defaults
           echo "CONFIG_SPIRAM_SPEED_80M=y" >> sdkconfig.defaults
           echo "CONFIG_SPI_MASTER_ISR_IN_IRAM=y" >> sdkconfig.defaults
-          echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
-          echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI=y" >> sdkconfig.defaults
           
-          # 3. 规避编译警告与严格检查
+          # 3. 语音唤醒与 ESP-SR 模型配置
+          echo "CONFIG_USE_AFE_WAKE_WORD=y" >> sdkconfig.defaults
+          echo "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y" >> sdkconfig.defaults
+          
+          # 4. 规避编译严格检查与 FreeType 冲突
           echo "CONFIG_COMPILER_WARN_WRITE_STRINGS=n" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y" >> sdkconfig.defaults
           echo "CONFIG_COMPILER_DISABLE_GCC15_WARNINGS=y" >> sdkconfig.defaults
           echo "CONFIG_LV_USE_FREETYPE=n" >> sdkconfig.defaults
           
-          # 4. 目标设置与编译
+          # 5. 编译
           idf.py set-target esp32s3
-          export IDF_PY_BUILD_JOBS=2
-          
-          idf.py reconfigure
+          export IDF_PY_BUILD_JOBS=1
           idf.py build
           idf.py merge-bin
           
-      - name: Upload Firmware
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: otto-esp32s3-firmware
+          # 注意这里的产物路径需要包含 xiaozhi-esp32 前缀
           path: xiaozhi-esp32/build/merged-binary.bin
           if-no-files-found: error

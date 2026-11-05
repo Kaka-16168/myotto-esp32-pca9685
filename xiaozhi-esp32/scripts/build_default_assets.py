@@ -298,7 +298,6 @@ def process_emoji_collection(emoji_collection_dir, assets_dir):
                         "file": file
                     })
                     
-    
     return emoji_list
 
 
@@ -1011,8 +1010,14 @@ def main():
     
     # 1. Only package wakenet models if USE_ESP_WAKE_WORD=y or USE_AFE_WAKE_WORD=y
     if wake_word_config['use_esp_wake_word'] or wake_word_config['use_afe_wake_word']:
+        # 【修复点】：如果没有选中任何模型，强制使用默认的 wn9_nihaoxiaozhi
+        if not wakenet_model_names:
+            print("Warning: Wake-word detection is enabled but no model selected in sdkconfig.")
+            print("Falling back to default WakeNet model: wn9_nihaoxiaozhi")
+            wakenet_model_names = ['wn9_nihaoxiaozhi']
+
         wakenet_model_paths = get_wakenet_model_paths(wakenet_model_names, args.esp_sr_model_path)
-        if not wakenet_model_names or len(wakenet_model_paths) != len(wakenet_model_names):
+        if len(wakenet_model_paths) != len(wakenet_model_names):
             parser.error("Wake-word detection requires selected, available ESP-SR WakeNet models")
     elif wakenet_model_names:
         print(f"  Note: Found wakenet models {wakenet_model_names} but wake word type is not ESP/AFE, skipping")

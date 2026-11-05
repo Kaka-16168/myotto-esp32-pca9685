@@ -11,7 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 注意：确保你的项目兼容 v6.1，如果本地用的是 v5.x，建议改成 espressif/idf:release-v5.1 或 v5.2
     container: espressif/idf:release-v6.1 
     
     steps:
@@ -23,10 +22,9 @@ jobs:
           . $IDF_PATH/export.sh
           
           # 如果你的项目在仓库根目录的子文件夹中，请确保路径正确
-          # 如果项目直接就在根目录，请删除这行 cd 命令
           cd xiaozhi-esp32
           
-          # 1. 暴力清理所有可能导致依赖冲突的缓存（云端是全新容器，这一步其实主要为了本地调试一致性）
+          # 1. 暴力清理所有可能导致依赖冲突的缓存
           rm -rf build
           rm -f sdkconfig sdkconfig.old
           rm -rf managed_components
@@ -49,12 +47,12 @@ jobs:
           
           # 4. 编译
           idf.py set-target esp32s3
-          export IDF_PY_BUILD_JOBS=1
+          export IDF_PY_BUILD_JOBS=2 
           
-          # 强制重新配置并拉取最新依赖 (针对 xiaozhi-fonts 缺失问题)
           idf.py reconfigure
           
           idf.py build
+          
           idf.py merge-bin
           
       - name: Upload Artifacts

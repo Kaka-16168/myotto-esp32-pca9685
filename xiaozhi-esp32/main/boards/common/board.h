@@ -1,13 +1,14 @@
 #ifndef BOARD_H
 #define BOARD_H
 
-#include <http.h>
-#include <web_socket.h>
-#include <mqtt.h>
-#include <udp.h>
+// 使用双引号，优先在当前目录（boards/common）查找头文件
+#include "http.h"
+#include "web_socket.h"
+#include "mqtt.h"
+#include "udp.h"
 #include <string>
 #include <functional>
-#include <network_interface.h>
+#include "network_interface.h"
 
 #include "led/led.h"
 #include "backlight.h"
@@ -40,12 +41,12 @@ enum class PowerSaveLevel {
 };
 
 // Network event callback type (event, data)
-// data contains additional info like SSID for Connecting/Connected events
 using NetworkEventCallback = std::function<void(NetworkEvent event, const std::string& data)>;
 
 void* create_board();
 class AudioCodec;
 class Display;
+
 class Board {
 private:
     Board(const Board&) = delete; // 禁用拷贝构造函数

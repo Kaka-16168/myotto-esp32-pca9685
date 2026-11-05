@@ -81,6 +81,17 @@ function(find_component_by_pattern PATTERN COMPONENT_VAR PATH_VAR)
     endforeach()
 endfunction()
 
+# 【提前查找组件，确保依赖注入成功】
+find_component_by_pattern("espressif__esp-sr" ESP_SR_COMPONENT ESP_SR_COMPONENT_PATH)
+if(ESP_SR_COMPONENT_PATH)
+    set(ESP_SR_MODEL_PATH "${ESP_SR_COMPONENT_PATH}/model")
+endif()
+
+find_component_by_pattern("xiaozhi-fonts" NOTO_FONTS_COMPONENT NOTO_FONTS_COMPONENT_PATH)
+if(NOTO_FONTS_COMPONENT_PATH)
+    set(NOTO_FONTS_PATH "${NOTO_FONTS_COMPONENT_PATH}")
+endif()
+
 set(BUILTIN_TEXT_FONT font_noto_sans_basic_14_1)
 set(BUILTIN_ICON_FONT font_material_symbols_14_1)
 set(EMOTE_RESOLUTION "320_240")
@@ -180,6 +191,12 @@ if(CONFIG_IDF_TARGET_ESP32S3)
 endif()
 
 set(MAIN_PRIV_REQUIRES_EXTRA "")
+# 【动态注入依赖项】
+if(NOTO_FONTS_COMPONENT)
+    list(APPEND MAIN_PRIV_REQUIRES_EXTRA ${NOTO_FONTS_COMPONENT})
+else()
+    list(APPEND MAIN_PRIV_REQUIRES_EXTRA "xiaozhi-fonts")
+endif()
 
 idf_component_register(SRCS ${SOURCES}
                     EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS}
@@ -207,7 +224,6 @@ idf_component_register(SRCS ${SOURCES}
                         efuse
                         bt
                         fatfs
-                        xiaozhi-fonts
                         ${MAIN_PRIV_REQUIRES_EXTRA}
                     )
 
@@ -258,16 +274,6 @@ add_custom_command(
 )
 
 add_custom_target(lang_header ALL DEPENDS ${LANG_HEADER})
-
-find_component_by_pattern("espressif__esp-sr" ESP_SR_COMPONENT ESP_SR_COMPONENT_PATH)
-if(ESP_SR_COMPONENT_PATH)
-    set(ESP_SR_MODEL_PATH "${ESP_SR_COMPONENT_PATH}/model")
-endif()
-
-find_component_by_pattern("xiaozhi-fonts" NOTO_FONTS_COMPONENT NOTO_FONTS_COMPONENT_PATH)
-if(NOTO_FONTS_COMPONENT_PATH)
-    set(NOTO_FONTS_PATH "${NOTO_FONTS_COMPONENT_PATH}")
-endif()
 
 function(build_default_assets_bin)
     set(GENERATED_ASSETS_BIN "${CMAKE_BINARY_DIR}/generated_assets.bin")

@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: espressif/idf:release-v6.1
+    container: espressif/idf:release-v6.1 
     
     steps:
       - name: Checkout code
@@ -22,7 +22,7 @@ jobs:
           . $IDF_PATH/export.sh
           cd xiaozhi-esp32
           
-          # 1. 彻底清理所有可能导致依赖冲突的缓存与锁定文件
+          # 1. 暴力清理所有可能导致依赖冲突的缓存
           rm -rf build
           rm -f sdkconfig sdkconfig.old
           rm -rf managed_components

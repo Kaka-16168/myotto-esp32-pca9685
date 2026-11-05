@@ -330,3 +330,6 @@ if ("${size}" AND "${offset}")
         esptool_py_flash_to_partition(flash "assets" "${GENERATED_ASSETS_LOCAL_FILE}")
     endif()
 endif()
+
+# 针对 xiaozhi-fonts 等第三方组件，放宽 int-conversion 严格检查
+idf_build_set_property(COMPILE_OPTIONS "-Wno-error=int-conversion" APPEND)
